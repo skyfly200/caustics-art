@@ -5,7 +5,7 @@ varying vec3 lightPosition;
 
 const float bias = 0.001;
 
-const vec3 underwaterColor = vec3(0.4, 0.9, 1.0);
+const vec3 underwaterColor = vec3(0.5, 0.5, 0.5);
 
 const vec2 resolution = vec2(1024.);
 

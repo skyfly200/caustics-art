@@ -1,50 +1,11 @@
-// Example
-
 const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.domElement);
 
 const canvas = document.getElementById('canvas');
 
-const width = canvas.width * 0.66;
-const height = canvas.height * 0.66;
-
-// Art Controls and Config
-let soundReactive = false;
-let mouseReactive = false;
-let focusWater = false;
-let audioReactivityRules = {
-  bandCount: 64,
-  globalThreshold: 155,
-  debugResponders: true,
-  responders: [
-    { band: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { band: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { band: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { band: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { band: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { band: 10, size: 0.01, amp: 0.05, threshold: 130 },
-  ]
-};
-    // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
-    // { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
-    // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
-let randomStart = false;
-let startDrops = 33;
-let raindrops = true;
-let intensity = 0.075;
-let wind = false;
-let windIntensity = 0.005;
-let geometryType = "plane";
-let polygonSides = 6; 
-
-// state vars for simulating water effects
-let gusting = false;
-let gustLength = 0;
-let gustStart = 0;
-let gustPosition;
-let gustSize;
-let gustMass;
+const width = canvas.width;
+const height = canvas.height;
 
 // Colors
 const black = new THREE.Color('black');
@@ -61,32 +22,28 @@ function loadFile(filename) {
 }
 
 // Constants
-const waterPosition = new THREE.Vector3(0, 0, 4);
-const surfacePosition = new THREE.Vector3(0, 0, 0);
-const near = 0;
-const far = 7;
-const waterSize = 2048;
+const waterPosition = new THREE.Vector3(0, 0, 0.8);
+const near = 0.;
+const far = 2.;
+const waterSize = 512;
 
 // Create directional light
 // TODO Replace this by a THREE.DirectionalLight and use the provided matrix (check that it's an Orthographic matrix as expected)
 const light = [0., 0., -1.];
 const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far);
-lightCamera.position.set(0., 0., far);
+lightCamera.position.set(0., 0., 1.5);
 lightCamera.lookAt(0, 0, 0);
 
 // Create Renderer
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-camera.position.set(0, 0, 2.25);
+const camera = new THREE.PerspectiveCamera(75, width / height, 0.01, 100);
+camera.position.set(-1.5, -1.5, 1);
 camera.up.set(0, 0, 1);
 scene.add(camera);
 
 const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true, alpha: true});
 renderer.setSize(width, height);
 renderer.autoClear = false;
-renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
-
-// TODO: Replace OrbitControls lib with three.js core solution
 
 // Create mouse Controls
 const controls = new THREE.OrbitControls(
@@ -94,36 +51,13 @@ const controls = new THREE.OrbitControls(
   canvas
 );
 
-controls.target = focusWater ? waterPosition : surfacePosition;
+controls.target = waterPosition;
 
 controls.minPolarAngle = 0;
 controls.maxPolarAngle = Math.PI / 2. - 0.1;
 
-controls.minDistance = 0.1;
-controls.maxDistance = 7;
-
-// Get audio context and create an analyser node
-const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-const analyser = audioContext.createAnalyser();
-// Set the FFT size (the number of bins in the frequency domain)
-analyser.fftSize = audioReactivityRules.bandCount;
-
-let frequencyData;
-let micLoaded;
-
-// TODO: out this into a seperate function
-
-try {
-  // Get the microphone stream
-  micLoaded = navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then( (value) => {
-    // Connect the microphone stream to the analyser node
-    const microphone = audioContext.createMediaStreamSource(value);
-    microphone.connect(analyser);
-
-    // Get the frequency data from the analyser
-    frequencyData = new Uint8Array(analyser.frequencyBinCount);
-  });
-} finally {}
+controls.minDistance = 1.5;
+controls.maxDistance = 3.;
 
 // Target for computing the water refraction
 const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);
@@ -184,24 +118,84 @@ const indices = new Uint32Array([
 // Environment
 const floorGeometry = new THREE.PlaneBufferGeometry(100, 100, 1, 1);
 
+const objLoader = new THREE.OBJLoader();
+let shark;
+const sharkLoaded = new Promise((resolve) => {
+  objLoader.load('assets/WhiteShark.obj', (sharkGeometry) => {
+    sharkGeometry = sharkGeometry.children[0].geometry;
+    sharkGeometry.computeVertexNormals();
+    sharkGeometry.scale(0.12, 0.12, 0.12);
+    sharkGeometry.rotateX(Math.PI / 2.);
+    sharkGeometry.rotateZ(-Math.PI / 2.);
+    sharkGeometry.translate(0, 0, 0.4);
+
+    shark = sharkGeometry;
+    resolve();
+  });
+});
+
+let rock1;
+let rock2;
+const rockLoaded = new Promise((resolve) => {
+  objLoader.load('assets/rock.obj', (rockGeometry) => {
+    rockGeometry = rockGeometry.children[0].geometry;
+    rockGeometry.computeVertexNormals();
+
+    rock1 = new THREE.BufferGeometry().copy(rockGeometry);
+    rock1.scale(0.05, 0.05, 0.02);
+    rock1.translate(0.2, 0., 0.1);
+
+    rock2 = new THREE.BufferGeometry().copy(rockGeometry);
+    rock2.scale(0.05, 0.05, 0.05);
+    rock2.translate(-0.5, 0.5, 0.2);
+    rock2.rotateZ(Math.PI / 2.);
+
+    resolve();
+  });
+});
+
+let plant;
+const plantLoaded = new Promise((resolve) => {
+  objLoader.load('assets/plant.obj', (plantGeometry) => {
+    plantGeometry = plantGeometry.children[0].geometry;
+    plantGeometry.computeVertexNormals();
+
+    plant = plantGeometry;
+    plant.rotateX(Math.PI / 6.);
+    plant.scale(0.03, 0.03, 0.03);
+    plant.translate(-0.5, 0.5, 0.);
+
+    resolve();
+  });
+});
+
+// Skybox
+const cubetextureloader = new THREE.CubeTextureLoader();
+
+const skybox = cubetextureloader.load([
+  'assets/TropicalSunnyDay_px.jpg', 'assets/TropicalSunnyDay_nx.jpg',
+  'assets/TropicalSunnyDay_py.jpg', 'assets/TropicalSunnyDay_ny.jpg',
+  'assets/TropicalSunnyDay_pz.jpg', 'assets/TropicalSunnyDay_nz.jpg',
+]);
+
+scene.background = skybox;
+
+
 class WaterSimulation {
 
   constructor() {
     this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 2000);
 
-    if (geometryType == "plane")
-      this._geometry = new THREE.PlaneBufferGeometry(2, 2);
-    else if (geometryType == "polygon")
-      this._geometry = new THREE.CircleGeometry(0.9, polygonSides);
+    this._geometry = new THREE.PlaneBufferGeometry(2, 2);
 
     this._targetA = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this._targetB = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this.target = this._targetA;
 
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/drop_fragment.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/update_fragment.glsl'),
+      loadFile('shaders/simulation/vertex.glsl'),
+      loadFile('shaders/simulation/drop_fragment.glsl'),
+      loadFile('shaders/simulation/update_fragment.glsl'),
     ];
 
     this.loaded = Promise.all(shadersPromises)
@@ -272,8 +266,8 @@ class Water {
     this.geometry = waterGeometry;
 
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/water/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/water/fragment.glsl')
+      loadFile('shaders/water/vertex.glsl'),
+      loadFile('shaders/water/fragment.glsl')
     ];
 
     this.loaded = Promise.all(shadersPromises)
@@ -283,7 +277,7 @@ class Water {
             light: { value: light },
             water: { value: null },
             envMap: { value: null },
-            skybox: { value: null },
+            skybox: { value: skybox },
         },
         vertexShader: vertexShader,
         fragmentShader: fragmentShader,
@@ -317,8 +311,8 @@ class EnvironmentMap {
     this.target = new THREE.WebGLRenderTarget(this.size, this.size, {type: THREE.FloatType});
 
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment_mapping/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment_mapping/fragment.glsl')
+      loadFile('shaders/environment_mapping/vertex.glsl'),
+      loadFile('shaders/environment_mapping/fragment.glsl')
     ];
 
     this._meshes = [];
@@ -365,8 +359,8 @@ class Caustics {
     this._waterGeometry = new THREE.PlaneBufferGeometry(2, 2, waterSize, waterSize);
 
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/caustics/water_vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/caustics/water_fragment.glsl'),
+      loadFile('shaders/caustics/water_vertex.glsl'),
+      loadFile('shaders/caustics/water_fragment.glsl'),
     ];
 
     this.loaded = Promise.all(shadersPromises)
@@ -434,10 +428,9 @@ class Environment {
 
   constructor() {
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/skyfly200/caustics-art/master/shaders/environment/fragment.glsl')
+      loadFile('shaders/environment/vertex.glsl'),
+      loadFile('shaders/environment/fragment.glsl')
     ];
-    
 
     this._meshes = [];
 
@@ -483,8 +476,8 @@ class Debug {
     this._geometry = new THREE.PlaneBufferGeometry();
 
     const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/debug/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/debug/fragment.glsl')
+      loadFile('shaders/debug/vertex.glsl'),
+      loadFile('shaders/debug/fragment.glsl')
     ];
 
     this.loaded = Promise.all(shadersPromises)
@@ -529,65 +522,9 @@ const debug = new Debug();
 // Main rendering loop
 function animate() {
   stats.begin();
-  
-  // Rain
-  if (raindrops) {
-    if (Math.random() <= intensity) {
-      let size = Math.random() * 0.1;
-      let mass = Math.random() * 0.1;
-      mass = (Math.random() > 0.5) ? mass : mass * -1
-      waterSimulation.addDrop(
-        renderer,
-        Math.random() * 2 - 1, Math.random() * 2 - 1,
-        size, mass
-      );
-    }
-  }
-  
-  // Wind
-  if (wind) {
-    // threshold for a gust to start
-    if (!gusting && (new Date().getTime() - gustStart >= gustLength) && Math.random() <= windIntensity) {
-      gusting = true;
-      gustLength = ((18 * Math.random()) + 2) * 1000;
-      gustStart = new Date().getTime();
-      gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustSize = Math.random() * 0.1 + 0.1;
-      gustMass = Math.random() * 0.1;
-    }
-    if (gusting) {
-      // move and vary wind gust variables frame by frame
-      gustPosition = {
-        x: gustPosition.x + (gustDirection.x * 0.005),
-        y: gustPosition.y + (gustDirection.y * 0.005)
-      };
-      //gustSize = gustSize + (Math.random() * 0.02 - 0.01);
-      //gustMass = gustMass + (Math.random() -0.5 * 0.002);
-      waterSimulation.addDrop(
-        renderer,
-        gustPosition.x, gustPosition.y,
-        gustSize, gustMass
-      );
-      // TODO: gust ramp with randomness in duration (ADSR envelope)
-      // check for gust end
-      gusting = (new Date().getTime() - gustStart) < gustLength;
-    }
-  }
 
   // Update the water
   if (clock.getElapsedTime() > 0.032) {
-    analyser.getByteFrequencyData(frequencyData);
-    
-    if (soundReactive) {
-      const responders = audioReactivityRules.responders;
-      for (const r in responders) {
-        let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
-        if (audioReactivityRules.debugResponders) console.log(responders[r].band, frequencyData[responders[r].band], frequencyData[responders[r].band] > threshold, threshold);
-        waterSimulation.addDrop(renderer, 0, 0, responders[r].size, (frequencyData[responders[r].band] > threshold ? responders[r].amp : 0 ));
-      }
-    }
-
     waterSimulation.stepSimulation(renderer);
 
     const waterTexture = waterSimulation.target.texture;
@@ -635,19 +572,17 @@ function animate() {
 }
 
 function onMouseMove(event) {
-  if (mouseReactive) {
-    const rect = canvas.getBoundingClientRect();
+  const rect = canvas.getBoundingClientRect();
 
-    mouse.x = (event.clientX - rect.left) * 2 / width - 1;
-    mouse.y = - (event.clientY - rect.top) * 2 / height + 1;
+  mouse.x = (event.clientX - rect.left) * 2 / width - 1;
+  mouse.y = - (event.clientY - rect.top) * 2 / height + 1;
 
-    raycaster.setFromCamera(mouse, camera);
+  raycaster.setFromCamera(mouse, camera);
 
-    const intersects = raycaster.intersectObject(targetmesh);
+  const intersects = raycaster.intersectObject(targetmesh);
 
-    for (let intersect of intersects) {
-      waterSimulation.addDrop(renderer, intersect.point.x, intersect.point.y, 0.03, 0.02);
-    }
+  for (let intersect of intersects) {
+    waterSimulation.addDrop(renderer, intersect.point.x, intersect.point.y, 0.03, 0.02);
   }
 }
 
@@ -658,11 +593,13 @@ const loaded = [
   environment.loaded,
   caustics.loaded,
   debug.loaded,
-  micLoaded,
+  sharkLoaded,
+  rockLoaded,
+  plantLoaded,
 ];
 
 Promise.all(loaded).then(() => {
-  const envGeometries = [floorGeometry];
+  const envGeometries = [floorGeometry, shark, rock1, rock2, plant];
 
   environmentMap.setGeometries(envGeometries);
   environment.setGeometries(envGeometries);
@@ -674,15 +611,12 @@ Promise.all(loaded).then(() => {
 
   canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
 
-  // Random starting drops
-  if (randomStart) {
-    for (var i = 0; i < startDrops; i++) {
-      waterSimulation.addDrop(
-        renderer,
-        Math.random() * 2 - 1, Math.random() * 2 - 1,
-        0.05, (i & 1) ? 0.05 : -0.05
-      );
-    }
+  for (var i = 0; i < 5; i++) {
+    waterSimulation.addDrop(
+      renderer,
+      Math.random() * 2 - 1, Math.random() * 2 - 1,
+      0.03, (i & 1) ? 0.02 : -0.02
+    );
   }
 
   animate();

@@ -10,20 +10,23 @@ const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = false;
-let mouseReactive = false;
+let soundReactive = true;
+let mouseReactive = true;
 let focusWater = false;
+// TODO: preset band responders fo rresonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 64,
-  globalThreshold: 155,
+  globalThreshold: 242,
   debugResponders: true,
+  randPos: true,
   responders: [
-    { band: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { band: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { band: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { band: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { band: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { band: 10, size: 0.01, amp: 0.05, threshold: 130 },
+    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
   ]
 };
     // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
@@ -31,12 +34,12 @@ let audioReactivityRules = {
     // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
 let randomStart = false;
 let startDrops = 33;
-let raindrops = true;
-let intensity = 0.075;
+let raindrops = false;
+let intensity = 0.033;
 let wind = false;
-let windIntensity = 0.005;
-let geometryType = "plane";
-let polygonSides = 6; 
+let windIntensity = 0.01;
+let geometryType = "polygon";
+let polygonSides = 7;
 
 // state vars for simulating water effects
 let gusting = false;
@@ -88,19 +91,57 @@ renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
 // TODO: Replace OrbitControls lib with three.js core solution
 
-// Create mouse Controls
-const controls = new THREE.OrbitControls(
-  camera,
-  canvas
-);
+const mouse = new THREE.Vector2();
+const raycaster = new THREE.Raycaster();
 
-controls.target = focusWater ? waterPosition : surfacePosition;
+const targetPosition = focusWater ? waterPosition : surfacePosition;
+const minPolarAngle = 0;
+const maxPolarAngle = Math.PI / 2. - 0.1;
+const minDistance = 0.1;
+const maxDistance = 7;
 
-controls.minPolarAngle = 0;
-controls.maxPolarAngle = Math.PI / 2. - 0.1;
+// Create mouse Controls (with OrbitControls)
+const controls = new THREE.OrbitControls( camera, canvas );
+// controls.target = targetPosition;
+// controls.minPolarAngle = minPolarAngle;
+// controls.maxPolarAngle = maxPolarAngle;
+// controls.minDistance = minDistance;
+// controls.maxDistance = maxDistance;
 
-controls.minDistance = 0.1;
-controls.maxDistance = 7;
+// Create mouse Controls (without OrbitControls)
+let isDragging = false;
+function onMouseDown(event) { isDragging = true; }
+function onMouseUp(event) { isDragging = false; }
+
+function onMouseMove(event) {
+  if (!isDragging) return;
+
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+
+  const intersects = raycaster.intersectObject(scene, true);
+
+  if (intersects.length > 0) {
+    const point = intersects[0].point;
+
+    const distance = Math.max(minDistance, Math.min(maxDistance, camera.position.distanceTo(point)));
+    const phi = Math.acos(Math.max(-1, Math.min(1, (point.y - targetPosition.y) / distance)));
+
+    camera.position.set(
+      distance * Math.sin(phi) * Math.sin(raycaster.ray.direction.x) + targetPosition.x,
+      distance * Math.cos(phi) + targetPosition.y,
+      distance * Math.sin(phi) * Math.cos(raycaster.ray.direction.x) + targetPosition.z
+    );
+
+    camera.lookAt(targetPosition);
+  }
+}
+
+canvas.addEventListener('mousedown', onMouseDown);
+canvas.addEventListener('mouseup', onMouseUp);
+canvas.addEventListener('mousemove', onMouseMove);
 
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -111,7 +152,7 @@ analyser.fftSize = audioReactivityRules.bandCount;
 let frequencyData;
 let micLoaded;
 
-// TODO: out this into a seperate function
+// TODO: pull out this into a seperate function
 
 try {
   // Get the microphone stream
@@ -125,6 +166,28 @@ try {
   });
 } finally {}
 
+// Setup keyboard commands
+document.onkeyup = function(e) {
+  console.log(e.which);
+  if (e.which == 77) { // M
+    soundReactive = !soundReactive;
+  } else if (e.which == 82) { // R
+    raindrops = !raindrops;
+  } else if (e.which == 87) { // W
+    wind = !wind;
+  } else if (e.which == 65) { // C
+    // clear the water surface
+  } else if (e.which == 68) { // F
+    // Change camera focus
+    focusWater = !focusWater;
+  }
+  // } else if (e.ctrlKey && e.altKey && e.which == 89) {
+  //   alert("Ctrl + Alt + Y shortcut combination was pressed");
+  // } else if (e.ctrlKey && e.altKey && e.shiftKey && e.which == 85) {
+  //   alert("Ctrl + Alt + Shift + U shortcut combination was pressed");
+  // }
+};
+
 // Target for computing the water refraction
 const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);
 
@@ -132,8 +195,6 @@ const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);
 const clock = new THREE.Clock();
 
 // Ray caster
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
 const targetgeometry = new THREE.PlaneGeometry(2, 2);
 for (let vertex of targetgeometry.vertices) {
   vertex.z = waterPosition.z;
@@ -547,32 +608,59 @@ function animate() {
   // Wind
   if (wind) {
     // threshold for a gust to start
-    if (!gusting && (new Date().getTime() - gustStart >= gustLength) && Math.random() <= windIntensity) {
+    if (!gusting && Math.random() <= windIntensity) {
       gusting = true;
-      gustLength = ((18 * Math.random()) + 2) * 1000;
-      gustStart = new Date().getTime();
+      gustStartTime = new Date().getTime();
+      gustDuration = ((18 * Math.random()) + 2) * 1000;
       gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
       gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustSize = Math.random() * 0.1 + 0.1;
-      gustMass = Math.random() * 0.1;
+      gustSize = Math.random() * 0.1 + 0.05;
+      gustMass = Math.random() * 0.01;
+      gustAmplitude = 0;
+      gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
     }
     if (gusting) {
-      // move and vary wind gust variables frame by frame
-      gustPosition = {
-        x: gustPosition.x + (gustDirection.x * 0.005),
-        y: gustPosition.y + (gustDirection.y * 0.005)
-      };
-      //gustSize = gustSize + (Math.random() * 0.02 - 0.01);
-      //gustMass = gustMass + (Math.random() -0.5 * 0.002);
-      waterSimulation.addDrop(
-        renderer,
-        gustPosition.x, gustPosition.y,
-        gustSize, gustMass
-      );
-      // TODO: gust ramp with randomness in duration (ADSR envelope)
-      // check for gust end
-      gusting = (new Date().getTime() - gustStart) < gustLength;
+      var timeSinceGustStart = new Date().getTime() - gustStartTime;
+      if (timeSinceGustStart >= gustDuration) {
+        gusting = false;
+      } else {
+        gustAmplitude = gustEnvelope(timeSinceGustStart);
+        gustPosition = {
+          x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
+          y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
+        };
+        var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
+        var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
+        var numDroplets = Math.floor(gustAmplitude * 10);
+        for (var i = 0; i < numDroplets; i++) {
+          waterSimulation.addDrop(
+            renderer,
+            gustPosition.x + (Math.random() - 0.5) * dropletSize * 2,
+            gustPosition.y + (Math.random() - 0.5) * dropletSize * 2,
+            dropletSize,
+            dropletMass
+          );
+        }
+      }
     }
+  }
+
+  function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
+    var attackDuration = attackTime * duration;
+    var decayDuration = decayTime * duration;
+    var releaseDuration = releaseTime * duration;
+    var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
+    return function (time) {
+      if (time <= attackDuration) {
+        return time / attackDuration;
+      } else if (time <= attackDuration + decayDuration) {
+        return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
+      } else if (time <= duration - releaseDuration) {
+        return sustainLevel;
+      } else {
+        return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
+      }
+    };
   }
 
   // Update the water
@@ -583,9 +671,24 @@ function animate() {
       const responders = audioReactivityRules.responders;
       for (const r in responders) {
         let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
-        if (audioReactivityRules.debugResponders) console.log(responders[r].band, frequencyData[responders[r].band], frequencyData[responders[r].band] > threshold, threshold);
-        waterSimulation.addDrop(renderer, 0, 0, responders[r].size, (frequencyData[responders[r].band] > threshold ? responders[r].amp : 0 ));
-      }
+        let posX = audioReactivityRules.randPos ? Math.random() * 2 - 1 : 0;
+        let posY = audioReactivityRules.randPos ? Math.random() * 2 - 1 : 0;
+
+        if (responders[r].startBand === responders[r].endBand) {
+          // Single band responder
+          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
+          waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
+        } else {
+          // Range of bands responder
+          let totalAmp = 0;
+          for (let i = responders[r].startBand; i <= responders[r].endBand; i++) {
+            totalAmp += frequencyData[i];
+          }
+          let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
+          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
+        waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
+        }
+      } 
     }
 
     waterSimulation.stepSimulation(renderer);

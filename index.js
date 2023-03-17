@@ -10,13 +10,13 @@ const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = true;
+let soundReactive = false;
 let mouseReactive = true;
 let focusWater = false;
-// TODO: preset band responders fo rresonant mode and custom resonators
+// TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 64,
-  globalThreshold: 242,
+  globalThreshold: 222,
   debugResponders: true,
   randPos: true,
   responders: [
@@ -34,12 +34,12 @@ let audioReactivityRules = {
     // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
 let randomStart = false;
 let startDrops = 33;
-let raindrops = false;
+let raindrops = true;
 let intensity = 0.033;
 let wind = false;
 let windIntensity = 0.01;
 let geometryType = "polygon";
-let polygonSides = 7;
+let polygonSides = 3; 
 
 // state vars for simulating water effects
 let gusting = false;
@@ -52,6 +52,7 @@ let gustMass;
 // Colors
 const black = new THREE.Color('black');
 const white = new THREE.Color('white');
+const purple = new THREE.Color('purple');
 
 function loadFile(filename) {
   return new Promise((resolve, reject) => {
@@ -68,14 +69,8 @@ const waterPosition = new THREE.Vector3(0, 0, 4);
 const surfacePosition = new THREE.Vector3(0, 0, 0);
 const near = 0;
 const far = 7;
-const waterSize = 2048;
+const waterSize = 1024;
 
-// Create directional light
-// TODO Replace this by a THREE.DirectionalLight and use the provided matrix (check that it's an Orthographic matrix as expected)
-const light = [0., 0., -1.];
-const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far);
-lightCamera.position.set(0., 0., far);
-lightCamera.lookAt(0, 0, 0);
 
 // Create Renderer
 const scene = new THREE.Scene();
@@ -84,6 +79,24 @@ camera.position.set(0, 0, 2.25);
 camera.up.set(0, 0, 1);
 scene.add(camera);
 
+// Create directional light
+// TODO Replace this by a THREE.DirectionalLight and use the provided matrix (check that it's an Orthographic matrix as expected)
+// TODO: add RGB Lighting with modulatable offsets
+const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far);
+lightCamera.position.set(0., 0., far);
+lightCamera.lookAt(0, 0, 0);
+
+const light = new THREE.DirectionalLight(0x44aaff, 1);
+light.position.set(0, 0, -1);
+scene.add(light);
+light.target.position.set(0, 0, 0);
+scene.add(light.target);
+
+// Offset RGB channels
+light.color.r += 0.2; // offset red channel
+light.color.g -= 0.1; // offset green channel
+light.color.b += 0.1; // offset blue channel
+
 const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true, alpha: true});
 renderer.setSize(width, height);
 renderer.autoClear = false;
@@ -91,57 +104,19 @@ renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
 // TODO: Replace OrbitControls lib with three.js core solution
 
-const mouse = new THREE.Vector2();
-const raycaster = new THREE.Raycaster();
+// Create mouse Controls
+const controls = new THREE.OrbitControls(
+  camera,
+  canvas
+);
 
-const targetPosition = focusWater ? waterPosition : surfacePosition;
-const minPolarAngle = 0;
-const maxPolarAngle = Math.PI / 2. - 0.1;
-const minDistance = 0.1;
-const maxDistance = 7;
+controls.target = focusWater ? waterPosition : surfacePosition;
 
-// Create mouse Controls (with OrbitControls)
-const controls = new THREE.OrbitControls( camera, canvas );
-// controls.target = targetPosition;
-// controls.minPolarAngle = minPolarAngle;
-// controls.maxPolarAngle = maxPolarAngle;
-// controls.minDistance = minDistance;
-// controls.maxDistance = maxDistance;
+controls.minPolarAngle = 0;
+controls.maxPolarAngle = Math.PI / 2. - 0.1;
 
-// Create mouse Controls (without OrbitControls)
-let isDragging = false;
-function onMouseDown(event) { isDragging = true; }
-function onMouseUp(event) { isDragging = false; }
-
-function onMouseMove(event) {
-  if (!isDragging) return;
-
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-
-  raycaster.setFromCamera(mouse, camera);
-
-  const intersects = raycaster.intersectObject(scene, true);
-
-  if (intersects.length > 0) {
-    const point = intersects[0].point;
-
-    const distance = Math.max(minDistance, Math.min(maxDistance, camera.position.distanceTo(point)));
-    const phi = Math.acos(Math.max(-1, Math.min(1, (point.y - targetPosition.y) / distance)));
-
-    camera.position.set(
-      distance * Math.sin(phi) * Math.sin(raycaster.ray.direction.x) + targetPosition.x,
-      distance * Math.cos(phi) + targetPosition.y,
-      distance * Math.sin(phi) * Math.cos(raycaster.ray.direction.x) + targetPosition.z
-    );
-
-    camera.lookAt(targetPosition);
-  }
-}
-
-canvas.addEventListener('mousedown', onMouseDown);
-canvas.addEventListener('mouseup', onMouseUp);
-canvas.addEventListener('mousemove', onMouseMove);
+controls.minDistance = 0.1;
+controls.maxDistance = 7;
 
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -195,6 +170,8 @@ const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);
 const clock = new THREE.Clock();
 
 // Ray caster
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 const targetgeometry = new THREE.PlaneGeometry(2, 2);
 for (let vertex of targetgeometry.vertices) {
   vertex.z = waterPosition.z;
@@ -297,7 +274,6 @@ class WaterSimulation {
     this._dropMesh.material.uniforms['center'].value = [x, y];
     this._dropMesh.material.uniforms['radius'].value = radius;
     this._dropMesh.material.uniforms['strength'].value = strength;
-
     this._render(renderer, this._dropMesh);
   }
 
@@ -341,7 +317,7 @@ class Water {
         .then(([vertexShader, fragmentShader]) => {
       this.material = new THREE.ShaderMaterial({
         uniforms: {
-            light: { value: light },
+            light: { value: light.position },
             water: { value: null },
             envMap: { value: null },
             skybox: { value: null },
@@ -434,7 +410,7 @@ class Caustics {
         .then(([waterVertexShader, waterFragmentShader]) => {
       this._waterMaterial = new THREE.ShaderMaterial({
         uniforms: {
-          light: { value: light },
+          light: { value: light.position },
           env: { value: null },
           water: { value: null },
           deltaEnvTexture: { value: null },
@@ -480,7 +456,7 @@ class Caustics {
     const oldTarget = renderer.getRenderTarget();
 
     renderer.setRenderTarget(this.target);
-    renderer.setClearColor(black, 0);
+    renderer.setClearColor(purple, 0.1);
     renderer.clear();
 
     renderer.render(this._waterMesh, lightCamera);
@@ -505,7 +481,7 @@ class Environment {
     this.loaded = Promise.all(shadersPromises).then(([vertexShader, fragmentShader]) => {
       this._material = new THREE.ShaderMaterial({
         uniforms: {
-          light: { value: light },
+          light: { value: light.position },
           caustics: { value: null },
           lightProjectionMatrix: { value: lightCamera.projectionMatrix },
           lightViewMatrix: { value: lightCamera.matrixWorldInverse  }
@@ -590,6 +566,8 @@ const debug = new Debug();
 // Main rendering loop
 function animate() {
   stats.begin();
+
+  // INPUTS
   
   // Rain
   if (raindrops) {
@@ -667,6 +645,7 @@ function animate() {
   if (clock.getElapsedTime() > 0.032) {
     analyser.getByteFrequencyData(frequencyData);
     
+    // Sound reactive input
     if (soundReactive) {
       const responders = audioReactivityRules.responders;
       for (const r in responders) {

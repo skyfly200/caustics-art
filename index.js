@@ -16,7 +16,7 @@ let wind = false;
 let randomStart = false;
 
 let startDrops = 33;
-let rainIntensity = 0.033; // Rain
+let rainIntensity = 0.033;
 let windIntensity = 0.01;
 let geometryType = "polygon";
 let polygonSides = 3;
@@ -38,9 +38,6 @@ audioReactivityRules.responders = [
   { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
   { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
 ];
-// { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
-// { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
-// { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
 
 
 // state vars for simulating water effects

@@ -1,5 +1,4 @@
-// Example
-
+// Caustic Renderer
 const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.domElement);
@@ -14,13 +13,14 @@ let mouseReactive = true;
 let rain = true;
 let wind = false;
 let randomStart = false;
+let focusWater = false;
 
 let startDrops = 33;
 let rainIntensity = 0.033;
 let windIntensity = 0.01;
 let geometryType = "polygon";
 let polygonSides = 3;
-let focusWater = false;
+let selectedResponder = "test";
 
 // TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
@@ -29,16 +29,28 @@ let audioReactivityRules = {
   debugResponders: true,
   randPos: true,
 };
-audioReactivityRules.responders = [
-  { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-  { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-  { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-  { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-  { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-  { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-  { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-];
 
+if (selectedResponder == "test") {
+  audioReactivityRules.responders = [
+    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+  ];
+} else if (selectedResponder == "harmonic") {
+  audioReactivityRules.responders = [
+    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+  ];
+}
 
 // state vars for simulating water effects
 let gusting = false;

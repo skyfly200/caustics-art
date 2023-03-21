@@ -5,41 +5,43 @@ stats.showPanel(0);
 document.body.appendChild(stats.domElement);
 
 const canvas = document.getElementById('canvas');
-
 const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = false;
+let soundReactive = true;
 let mouseReactive = true;
+let rain = true;
+let wind = false;
+let randomStart = false;
+
+let startDrops = 33;
+let rainIntensity = 0.033; // Rain
+let windIntensity = 0.01;
+let geometryType = "polygon";
+let polygonSides = 3;
 let focusWater = false;
+
 // TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 64,
   globalThreshold: 222,
   debugResponders: true,
   randPos: true,
-  responders: [
-    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-  ]
 };
-    // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
-    // { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
-    // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
-let randomStart = false;
-let startDrops = 33;
-let raindrops = true;
-let intensity = 0.033;
-let wind = false;
-let windIntensity = 0.01;
-let geometryType = "polygon";
-let polygonSides = 3; 
+audioReactivityRules.responders = [
+  { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+  { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+  { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+  { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+  { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+  { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+  { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+];
+// { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
+// { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
+// { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
+
 
 // state vars for simulating water effects
 let gusting = false;
@@ -147,7 +149,7 @@ document.onkeyup = function(e) {
   if (e.which == 77) { // M
     soundReactive = !soundReactive;
   } else if (e.which == 82) { // R
-    raindrops = !raindrops;
+    rain = !rain;
   } else if (e.which == 87) { // W
     wind = !wind;
   } else if (e.which == 65) { // C
@@ -570,8 +572,8 @@ function animate() {
   // INPUTS
   
   // Rain
-  if (raindrops) {
-    if (Math.random() <= intensity) {
+  if (rain) {
+    if (Math.random() <= rainIntensity) {
       let size = Math.random() * 0.1;
       let mass = Math.random() * 0.1;
       mass = (Math.random() > 0.5) ? mass : mass * -1

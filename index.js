@@ -20,7 +20,7 @@ let rainIntensity = 0.033;
 let windIntensity = 0.01;
 let geometryType = "polygon";
 let polygonSides = 3;
-let selectedResponder = "test";
+let selectedResponder = "single";
 
 // TODO: preset band responders for resonant mode and custom resonators
 
@@ -43,7 +43,27 @@ if (selectedResponder == "test") {
     ]
   }; 
 } else if (selectedResponder == "harmonic") {
+  // Calculate the frequencies of the harmonic series
+  // const freqs = [];
+  // for (let i = 1; i <= 1024; i++) freqs.push(i);
+  
+  // // Calculate the amplitudes of the harmonic series (this is just an example formula, you can tweak it as needed)
+  // const amps = freqs.map((f) => 1 / (f * f));
+  
+  // // Create an array of responders using the harmonic series
+  // const responders = [];
+  // for (let i = 0; i < freqs.length; i++) {
+  //   responders.push({
+  //     startBand: freqs[i],
+  //     endBand: freqs[i],
+  //     size: 0.2,
+  //     amp: amps[i],
+  //     threshold: 250,
+  //   });
+  // }
+  
   audioReactivityRules = {
+    bandCount: 1024,
     globalThreshold: 222,
     debugResponders: false,
     randPos: false,
@@ -58,6 +78,16 @@ if (selectedResponder == "test") {
     ]
   };
 
+} else if (selectedResponder == "single") {
+  audioReactivityRules = {
+    bandCount: 4096,
+    globalThreshold: 255,
+    debugResponders: false,
+    randPos: true,
+    responders: [
+      { startBand: 500, endBand: 1000, size: 0.05, amp: 0.03, threshold: 190 }
+    ]
+  };
 }
 
 // state vars for simulating water effects

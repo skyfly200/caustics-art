@@ -23,33 +23,41 @@ let polygonSides = 3;
 let selectedResponder = "test";
 
 // TODO: preset band responders for resonant mode and custom resonators
-let audioReactivityRules = {
-  bandCount: 64,
-  globalThreshold: 222,
-  debugResponders: true,
-  randPos: true,
-};
+
+let audioReactivityRules;
 
 if (selectedResponder == "test") {
-  audioReactivityRules.responders = [
-    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-  ];
+  audioReactivityRules = {
+    bandCount: 64, // must be power of 2, in range 32-2048, 2048 default
+    globalThreshold: 222,
+    debugResponders: false, // print on each trigger of a responder
+    randPos: true,
+    responders: [
+      { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+      { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+      { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+      { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+      { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+      { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+      { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+    ]
+  }; 
 } else if (selectedResponder == "harmonic") {
-  audioReactivityRules.responders = [
-    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-  ];
+  audioReactivityRules = {
+    globalThreshold: 222,
+    debugResponders: false,
+    randPos: false,
+    responders: [ // TODO: use harmonic series pattern in 2048 bands
+      { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+      { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+      { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+      { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+      { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+      { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
+      { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+    ]
+  };
+
 }
 
 // state vars for simulating water effects

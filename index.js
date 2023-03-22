@@ -10,7 +10,7 @@ const height = canvas.height * 0.66;
 // Art Controls and Config
 let soundReactive = true;
 let mouseReactive = true;
-let rain = true;
+let rain = false;
 let wind = false;
 let randomStart = false;
 let focusWater = false;
@@ -20,17 +20,15 @@ let rainIntensity = 0.033;
 let windIntensity = 0.01;
 let geometryType = "polygon";
 let polygonSides = 3;
-let selectedResponder = "single";
-
-// TODO: preset band responders for resonant mode and custom resonators
+let selectedResponder = "harmonic";
 
 let audioReactivityRules;
 
 if (selectedResponder == "test") {
   audioReactivityRules = {
-    bandCount: 64, // must be power of 2, in range 32-2048, 2048 default
+    bandCount: 64, // must be power of 2, in range 32-32768, 2048 default
     globalThreshold: 222,
-    debugResponders: false, // print on each trigger of a responder
+    debugResponders: true, // print on each trigger of a responder
     randPos: true,
     responders: [
       { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
@@ -44,45 +42,39 @@ if (selectedResponder == "test") {
   }; 
 } else if (selectedResponder == "harmonic") {
   // Calculate the frequencies of the harmonic series
-  // const freqs = [];
-  // for (let i = 1; i <= 1024; i++) freqs.push(i);
+  const bands = 32768;
+  const freqs = [];
+  const r = 10;
+  for (let i = 1; i*r <= bands; i++) freqs.push(r * i);
   
-  // // Calculate the amplitudes of the harmonic series (this is just an example formula, you can tweak it as needed)
-  // const amps = freqs.map((f) => 1 / (f * f));
+  // Calculate the amplitudes of the harmonic series (this is just an example formula, you can tweak it as needed)
+  const amps = freqs.map((f) => 1 / (f * f));
   
-  // // Create an array of responders using the harmonic series
-  // const responders = [];
-  // for (let i = 0; i < freqs.length; i++) {
-  //   responders.push({
-  //     startBand: freqs[i],
-  //     endBand: freqs[i],
-  //     size: 0.2,
-  //     amp: amps[i],
-  //     threshold: 250,
-  //   });
-  // }
+  // Create an array of responders using the harmonic series
+  const responders = [];
+  for (let i = 0; i < freqs.length; i++) {
+    responders.push({
+      startBand: freqs[i],
+      endBand: freqs[i],
+      size: 0.2,
+      amp: amps[i],
+      threshold: 50,
+    });
+  }
   
   audioReactivityRules = {
-    bandCount: 1024,
+    bandCount: bands,
     globalThreshold: 222,
-    debugResponders: false,
+    debugResponders: true,
     randPos: false,
-    responders: [ // TODO: use harmonic series pattern in 2048 bands
-      { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-      { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-      { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-      { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-      { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-      { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-      { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-    ]
+    responders: responders
   };
 
 } else if (selectedResponder == "single") {
   audioReactivityRules = {
     bandCount: 4096,
     globalThreshold: 255,
-    debugResponders: false,
+    debugResponders: true,
     randPos: true,
     responders: [
       { startBand: 500, endBand: 1000, size: 0.05, amp: 0.03, threshold: 190 }
@@ -167,6 +159,8 @@ controls.maxPolarAngle = Math.PI / 2. - 0.1;
 controls.minDistance = 0.1;
 controls.maxDistance = 7;
 
+// TODO: pull out this into a seperate function
+
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioContext.createAnalyser();
@@ -175,8 +169,6 @@ analyser.fftSize = audioReactivityRules.bandCount;
 
 let frequencyData;
 let micLoaded;
-
-// TODO: pull out this into a seperate function
 
 try {
   // Get the microphone stream
@@ -693,6 +685,7 @@ function animate() {
   // Update the water
   if (clock.getElapsedTime() > 0.032) {
     analyser.getByteFrequencyData(frequencyData);
+    // console.log(frequencyData);
     
     // Sound reactive input
     if (soundReactive) {
@@ -704,7 +697,7 @@ function animate() {
 
         if (responders[r].startBand === responders[r].endBand) {
           // Single band responder
-          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
+          if (audioReactivityRules.debugResponders) console.log(r, responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
           waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
         } else {
           // Range of bands responder

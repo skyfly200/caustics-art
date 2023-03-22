@@ -43,8 +43,8 @@ if (selectedResponder == "test") {
 } else if (selectedResponder == "harmonic") {
   // Calculate the frequencies of the harmonic series
   const bands = 32768;
+  const r = 1111;
   const freqs = [];
-  const r = 10;
   for (let i = 1; i*r <= bands; i++) freqs.push(r * i);
   
   // Calculate the amplitudes of the harmonic series (this is just an example formula, you can tweak it as needed)

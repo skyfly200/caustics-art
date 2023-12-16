@@ -76,7 +76,6 @@ const envVert = `
     varying float lightIntensity;
     varying vec3 lightPosition;
 
-
     void main(void){
       lightIntensity = - dot(light, normalize(normal));
 
@@ -169,7 +168,6 @@ const causticFrag = `
     varying float waterDepth;
     varying float depth;
 
-
     void main() {
       float causticsIntensity = 0.;
 
@@ -212,7 +210,6 @@ const causticVert = `
     // This is the maximum iterations when looking for the ray intersection with the environment,
     // if after this number of attempts we did not find the intersection, the result will be wrong.
     const int MAX_ITERATIONS = 50;
-
 
     void main() {
       vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
@@ -411,7 +408,6 @@ const surfacePosition = new THREE.Vector3(0, 0, 0);
 const near = 0;
 const far = 4;
 const waterSize = 1024;
-
 
 // Create Renderer
 const scene = new THREE.Scene();

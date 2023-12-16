@@ -1,86 +1,428 @@
-// Caustic Renderer
+// Caustics Art Project
+
+// Define your shaders as strings localy
+const waterFrag = `
+    // TODO Make it a uniform
+    const float causticsFactor = 0.15;
+
+    varying vec3 oldPosition;
+    varying vec3 newPosition;
+    varying float waterDepth;
+    varying float depth;
+
+
+    void main() {
+      float causticsIntensity = 0.;
+
+      if (depth >= waterDepth) {
+        float oldArea = length(dFdx(oldPosition)) * length(dFdy(oldPosition));
+        float newArea = length(dFdx(newPosition)) * length(dFdy(newPosition));
+
+        float ratio;
+
+        // Prevent dividing by zero (debug NVidia drivers)
+        if (newArea == 0.) {
+          // Arbitrary large value
+          ratio = 2.0e+20;
+        } else {
+          ratio = oldArea / newArea;
+        }
+
+        causticsIntensity = causticsFactor * ratio;
+      }
+
+      gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
+    }
+`;
+
+const waterVert = `
+    uniform vec3 light;
+    uniform sampler2D water;
+    uniform sampler2D env;
+    uniform float deltaEnvTexture;
+
+    varying vec3 oldPosition;
+    varying vec3 newPosition;
+    varying float waterDepth;
+    varying float depth;
+
+    // Air refractive index / Water refractive index
+    const float eta = 0.7504;
+
+    // TODO Make this a uniform
+    // This is the maximum iterations when looking for the ray intersection with the environment,
+    // if after this number of attempts we did not find the intersection, the result will be wrong.
+    const int MAX_ITERATIONS = 50;
+
+    void main() {
+      vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
+
+      // The water position is the vertex position on which we apply the height-map
+      // TODO Remove the ugly hardcoded +0.8 for the water position
+      vec3 waterPosition = vec3(position.xy, position.z + waterInfo.r + 0.8);
+      vec3 waterNormal = normalize(vec3(waterInfo.b, sqrt(1.0 - dot(waterInfo.ba, waterInfo.ba)), waterInfo.a)).xzy;
+
+      // This is the initial position: the ray starting point
+      oldPosition = waterPosition;
+
+      // Compute water coordinates in the screen space
+      vec4 projectedWaterPosition = projectionMatrix * viewMatrix * vec4(waterPosition, 1.);
+
+      vec2 currentPosition = projectedWaterPosition.xy;
+      vec2 coords = 0.5 + 0.5 * currentPosition;
+
+      vec3 refracted = refract(light, waterNormal, eta);
+      vec4 projectedRefractionVector = projectionMatrix * viewMatrix * vec4(refracted, 1.);
+
+      vec3 refractedDirection = projectedRefractionVector.xyz;
+
+      waterDepth = 0.5 + 0.5 * projectedWaterPosition.z / projectedWaterPosition.w;
+      float currentDepth = projectedWaterPosition.z;
+      vec4 environment = texture2D(env, coords);
+
+      // This factor will scale the delta parameters so that we move from one pixel to the other in the env map
+      float factor = deltaEnvTexture / length(refractedDirection.xy);
+
+      vec2 deltaDirection = refractedDirection.xy * factor;
+      float deltaDepth = refractedDirection.z * factor;
+
+      for (int i = 0; i < MAX_ITERATIONS; i++) {
+        // Move the coords in the direction of the refraction
+        currentPosition += deltaDirection;
+        currentDepth += deltaDepth;
+
+        // End of loop condition: The ray has hit the environment
+        if (environment.w <= currentDepth) {
+          break;
+        }
+
+        environment = texture2D(env, 0.5 + 0.5 * currentPosition);
+      }
+
+      newPosition = environment.xyz;
+
+      vec4 projectedEnvPosition = projectionMatrix * viewMatrix * vec4(newPosition, 1.0);
+      depth = 0.5 + 0.5 * projectedEnvPosition.z / projectedEnvPosition.w;
+
+      gl_Position = projectedEnvPosition;
+    }
+`;
+
+const envVert = `
+    uniform vec3 light;
+    // Light projection matrix
+    uniform mat4 lightProjectionMatrix;
+    uniform mat4 lightViewMatrix;
+
+    varying float lightIntensity;
+    varying vec3 lightPosition;
+
+
+    void main(void){
+      lightIntensity = - dot(light, normalize(normal));
+
+      // Compute position in the light coordinates system, this will be used for
+      // comparing fragment depth with the caustics texture
+      vec4 lightRelativePosition = lightProjectionMatrix * lightViewMatrix * modelMatrix * vec4(position, 1.);
+      lightPosition = 0.5 + lightRelativePosition.xyz / lightRelativePosition.w * 0.5;
+
+      // The position of the vertex
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
+    }
+`;
+
+const envFrag = `
+  uniform sampler2D caustics;
+  varying float lightIntensity;
+  varying vec3 lightPosition;
+
+  const float bias = 0.001;
+
+  const vec3 underwaterColor = vec3(0.2, 0.2, 0.2);
+
+  const vec2 resolution = vec2(1024.);
+
+  float blur(sampler2D image, vec2 uv, vec2 resolution, vec2 direction) {
+    float intensity = 0.;
+    vec2 off1 = vec2(1.3846153846) * direction;
+    vec2 off2 = vec2(3.2307692308) * direction;
+    intensity += texture2D(image, uv).x * 0.2270270270;
+    intensity += texture2D(image, uv + (off1 / resolution)).x * 0.3162162162;
+    intensity += texture2D(image, uv - (off1 / resolution)).x * 0.3162162162;
+    intensity += texture2D(image, uv + (off2 / resolution)).x * 0.0702702703;
+    intensity += texture2D(image, uv - (off2 / resolution)).x * 0.0702702703;
+    return intensity;
+  }
+
+  void main() {
+    // Set the frag color
+    float computedLightIntensity = 0.5;
+
+    computedLightIntensity += 0.2 * lightIntensity;
+
+    // Retrieve caustics depth information
+    float causticsDepth = texture2D(caustics, lightPosition.xy).w;
+
+    if (causticsDepth > lightPosition.z - bias) {
+      // Percentage Close Filtering
+      float causticsIntensity = 0.5 * (
+        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.5)) +
+        blur(caustics, lightPosition.xy, resolution, vec2(0.5, 0.))
+      );
+
+      computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
+    }
+
+    gl_FragColor = vec4(underwaterColor * computedLightIntensity, 1.);
+  }
+`;
+
+const mapFrag = `
+    varying vec4 worldPosition;
+    varying float depth;
+    void main() {
+      gl_FragColor = vec4(worldPosition.xyz, depth);
+    }
+`;
+
+const mapVert = `
+    varying vec4 worldPosition;
+    varying float depth;
+    void main() {
+      // Compute world position
+      worldPosition = modelMatrix * vec4(position, 1.);
+
+      // Project vertex in the screen coordinates
+      vec4 projectedPosition = projectionMatrix * viewMatrix * worldPosition;
+
+      // Store vertex depth
+      depth = projectedPosition.z;
+
+      gl_Position = projectedPosition;
+    }
+`;
+
+const causticFrag = `
+    // TODO Make it a uniform
+    const float causticsFactor = 0.15;
+    varying vec3 oldPosition;
+    varying vec3 newPosition;
+    varying float waterDepth;
+    varying float depth;
+
+
+    void main() {
+      float causticsIntensity = 0.;
+
+      if (depth >= waterDepth) {
+        float oldArea = length(dFdx(oldPosition)) * length(dFdy(oldPosition));
+        float newArea = length(dFdx(newPosition)) * length(dFdy(newPosition));
+
+        float ratio;
+
+        // Prevent dividing by zero (debug NVidia drivers)
+        if (newArea == 0.) {
+          // Arbitrary large value
+          ratio = 2.0e+20;
+        } else {
+          ratio = oldArea / newArea;
+        }
+
+        causticsIntensity = causticsFactor * ratio;
+      }
+
+      gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
+    }
+`;
+
+const causticVert = `
+    uniform vec3 light;
+    uniform sampler2D water;
+    uniform sampler2D env;
+    uniform float deltaEnvTexture;
+
+    varying vec3 oldPosition;
+    varying vec3 newPosition;
+    varying float waterDepth;
+    varying float depth;
+
+    // Air refractive index / Water refractive index
+    const float eta = 0.7504;
+
+    // TODO Make this a uniform
+    // This is the maximum iterations when looking for the ray intersection with the environment,
+    // if after this number of attempts we did not find the intersection, the result will be wrong.
+    const int MAX_ITERATIONS = 50;
+
+
+    void main() {
+      vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
+
+      // The water position is the vertex position on which we apply the height-map
+      // TODO Remove the ugly hardcoded +0.8 for the water position
+      vec3 waterPosition = vec3(position.xy, position.z + waterInfo.r + 0.8);
+      vec3 waterNormal = normalize(vec3(waterInfo.b, sqrt(1.0 - dot(waterInfo.ba, waterInfo.ba)), waterInfo.a)).xzy;
+
+      // This is the initial position: the ray starting point
+      oldPosition = waterPosition;
+
+      // Compute water coordinates in the screen space
+      vec4 projectedWaterPosition = projectionMatrix * viewMatrix * vec4(waterPosition, 1.);
+
+      vec2 currentPosition = projectedWaterPosition.xy;
+      vec2 coords = 0.5 + 0.5 * currentPosition;
+
+      vec3 refracted = refract(light, waterNormal, eta);
+      vec4 projectedRefractionVector = projectionMatrix * viewMatrix * vec4(refracted, 1.);
+
+      vec3 refractedDirection = projectedRefractionVector.xyz;
+
+      waterDepth = 0.5 + 0.5 * projectedWaterPosition.z / projectedWaterPosition.w;
+      float currentDepth = projectedWaterPosition.z;
+      vec4 environment = texture2D(env, coords);
+
+      // This factor will scale the delta parameters so that we move from one pixel to the other in the env map
+      float factor = deltaEnvTexture / length(refractedDirection.xy);
+
+      vec2 deltaDirection = refractedDirection.xy * factor;
+      float deltaDepth = refractedDirection.z * factor;
+
+      for (int i = 0; i < MAX_ITERATIONS; i++) {
+        // Move the coords in the direction of the refraction
+        currentPosition += deltaDirection;
+        currentDepth += deltaDepth;
+
+        // End of loop condition: The ray has hit the environment
+        if (environment.w <= currentDepth) {
+          break;
+        }
+
+        environment = texture2D(env, 0.5 + 0.5 * currentPosition);
+      }
+
+      newPosition = environment.xyz;
+
+      vec4 projectedEnvPosition = projectionMatrix * viewMatrix * vec4(newPosition, 1.0);
+      depth = 0.5 + 0.5 * projectedEnvPosition.z / projectedEnvPosition.w;
+
+      gl_Position = projectedEnvPosition;
+    }
+`;
+
+const simUpdateFrag = `
+    precision highp float;
+    precision highp int;
+
+    uniform sampler2D texture;
+    uniform vec2 delta;
+    varying vec2 coord;
+
+    void main() {
+      /* get vertex info */
+      vec4 info = texture2D(texture, coord);
+
+      /* calculate average neighbor height */
+      vec2 dx = vec2(delta.x, 0.0);
+      vec2 dy = vec2(0.0, delta.y);
+      float average = (
+        texture2D(texture, coord - dx).r +
+        texture2D(texture, coord - dy).r +
+        texture2D(texture, coord + dx).r +
+        texture2D(texture, coord + dy).r
+      ) * 0.25;
+
+      /* change the velocity to move toward the average */
+      info.g += (average - info.r) * 2.0;
+
+      /* attenuate the velocity a little so waves do not last forever */
+      info.g *= 0.995;
+
+      /* move the vertex along the velocity */
+      info.r += info.g;
+
+      /* update the normal */
+      vec3 ddx = vec3(delta.x, texture2D(texture, vec2(coord.x + delta.x, coord.y)).r - info.r, 0.0);
+      vec3 ddy = vec3(0.0, texture2D(texture, vec2(coord.x, coord.y + delta.y)).r - info.r, delta.y);
+      info.ba = normalize(cross(ddy, ddx)).xz;
+
+      gl_FragColor = info;
+    }
+`;
+
+const simDropFrag = `
+    precision highp float;
+    precision highp int;
+
+    const float PI = 3.141592653589793;
+    uniform sampler2D texture;
+    uniform vec2 center;
+    uniform float radius;
+    uniform float strength;
+    varying vec2 coord;
+
+    void main() {
+      /* Get vertex info */
+      vec4 info = texture2D(texture, coord);
+
+      /* Add the drop to the height */
+      float drop = max(0.0, 1.0 - length(center * 0.5 + 0.5 - coord) / radius);
+      drop = 0.5 - cos(drop * PI) * 0.5;
+      info.r += drop * strength;
+
+      gl_FragColor = info;
+    }
+`;
+
+const simVert = `
+    attribute vec3 position;
+    varying vec2 coord;
+    void main() {
+      coord = position.xy * 0.5 + 0.5;
+      gl_Position = vec4(position.xyz, 1.0);
+    }
+`;
+
+// setup for the script
 const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.domElement);
 
 const canvas = document.getElementById('canvas');
+
 const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = true;
-let mouseReactive = true;
-let rain = false;
-let wind = false;
-let randomStart = false;
+let soundReactive = false;
+let mouseReactive = false;
 let focusWater = false;
-
+let randPos = false;
+// TODO: preset band responders for resonant mode and custom resonators
+let audioReactivityRules = {
+  bandCount: 32768,
+  globalThreshold: 111,
+  debugResponders: true,
+  responders: [
+    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+    { startBand: 10, endBand: 20, size: 0.01, amp: 0.05, threshold: 180 },
+    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+  ]
+};
+    // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
+    // { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
+    // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
+let randomStart = false;
 let startDrops = 33;
-let rainIntensity = 0.033;
+let raindrops = true;
+let intensity = 0.033;
+let wind = false;
 let windIntensity = 0.01;
 let geometryType = "polygon";
-let polygonSides = 3;
-let selectedResponder = "harmonic";
-
-let audioReactivityRules;
-
-if (selectedResponder == "test") {
-  audioReactivityRules = {
-    bandCount: 64, // must be power of 2, in range 32-32768, 2048 default
-    globalThreshold: 222,
-    debugResponders: true, // print on each trigger of a responder
-    randPos: true,
-    responders: [
-      { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-      { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-      { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-      { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-      { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-      { startBand: 10, endBand: 10, size: 0.01, amp: 0.05, threshold: 180 },
-      { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-    ]
-  }; 
-} else if (selectedResponder == "harmonic") {
-  // Calculate the frequencies of the harmonic series
-  const bands = 32768;
-  const r = 1111;
-  const freqs = [];
-  for (let i = 1; i*r <= bands; i++) freqs.push(r * i);
-  
-  // Calculate the amplitudes of the harmonic series (this is just an example formula, you can tweak it as needed)
-  const amps = freqs.map((f) => 1 / (f * f));
-  
-  // Create an array of responders using the harmonic series
-  const responders = [];
-  for (let i = 0; i < freqs.length; i++) {
-    responders.push({
-      startBand: freqs[i],
-      endBand: freqs[i],
-      size: 0.2,
-      amp: amps[i],
-      threshold: 50,
-    });
-  }
-  
-  audioReactivityRules = {
-    bandCount: bands,
-    globalThreshold: 222,
-    debugResponders: true,
-    randPos: false,
-    responders: responders
-  };
-
-} else if (selectedResponder == "single") {
-  audioReactivityRules = {
-    bandCount: 4096,
-    globalThreshold: 255,
-    debugResponders: true,
-    randPos: true,
-    responders: [
-      { startBand: 500, endBand: 1000, size: 0.05, amp: 0.03, threshold: 190 }
-    ]
-  };
-}
+let polygonSides = 24; 
 
 // state vars for simulating water effects
 let gusting = false;
@@ -93,7 +435,6 @@ let gustMass;
 // Colors
 const black = new THREE.Color('black');
 const white = new THREE.Color('white');
-const purple = new THREE.Color('purple');
 
 function loadFile(filename) {
   return new Promise((resolve, reject) => {
@@ -109,7 +450,7 @@ function loadFile(filename) {
 const waterPosition = new THREE.Vector3(0, 0, 4);
 const surfacePosition = new THREE.Vector3(0, 0, 0);
 const near = 0;
-const far = 7;
+const far = 4;
 const waterSize = 1024;
 
 
@@ -159,8 +500,6 @@ controls.maxPolarAngle = Math.PI / 2. - 0.1;
 controls.minDistance = 0.1;
 controls.maxDistance = 7;
 
-// TODO: pull out this into a seperate function
-
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioContext.createAnalyser();
@@ -169,6 +508,8 @@ analyser.fftSize = audioReactivityRules.bandCount;
 
 let frequencyData;
 let micLoaded;
+
+// TODO: pull out this into a seperate function
 
 try {
   // Get the microphone stream
@@ -188,7 +529,7 @@ document.onkeyup = function(e) {
   if (e.which == 77) { // M
     soundReactive = !soundReactive;
   } else if (e.which == 82) { // R
-    rain = !rain;
+    raindrops = !raindrops;
   } else if (e.which == 87) { // W
     wind = !wind;
   } else if (e.which == 65) { // C
@@ -276,38 +617,28 @@ class WaterSimulation {
     this._targetA = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this._targetB = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this.target = this._targetA;
-
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/drop_fragment.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/simulation/update_fragment.glsl'),
-    ];
-
-    this.loaded = Promise.all(shadersPromises)
-        .then(([vertexShader, dropFragmentShader, updateFragmentShader]) => {
-      const dropMaterial = new THREE.RawShaderMaterial({
-        uniforms: {
-            center: { value: [0, 0] },
-            radius: { value: 0 },
-            strength: { value: 0 },
-            texture: { value: null },
-        },
-        vertexShader: vertexShader,
-        fragmentShader: dropFragmentShader,
-      });
-
-      const updateMaterial = new THREE.RawShaderMaterial({
-        uniforms: {
-            delta: { value: [1 / 216, 1 / 216] },  // TODO: Remove this useless uniform and hardcode it in shaders?
-            texture: { value: null },
-        },
-        vertexShader: vertexShader,
-        fragmentShader: updateFragmentShader,
-      });
-
-      this._dropMesh = new THREE.Mesh(this._geometry, dropMaterial);
-      this._updateMesh = new THREE.Mesh(this._geometry, updateMaterial);
+    const dropMaterial = new THREE.RawShaderMaterial({
+      uniforms: {
+        center: { value: [0, 0] },
+        radius: { value: 0 },
+        strength: { value: 0 },
+        texture: { value: null },
+      },
+      vertexShader: simVert,
+      fragmentShader: simDropFrag,
     });
+
+    const updateMaterial = new THREE.RawShaderMaterial({
+      uniforms: {
+        delta: { value: [1 / 216, 1 / 216] },  // TODO: Remove this useless uniform and hardcode it in shaders?
+        texture: { value: null },
+      },
+      vertexShader: simVert,
+      fragmentShader: simUpdateFrag,
+    });
+
+    this._dropMesh = new THREE.Mesh(this._geometry, dropMaterial);
+    this._updateMesh = new THREE.Mesh(this._geometry, updateMaterial);
   }
 
   // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])
@@ -348,31 +679,22 @@ class Water {
 
   constructor() {
     this.geometry = waterGeometry;
-
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/water/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/water/fragment.glsl')
-    ];
-
-    this.loaded = Promise.all(shadersPromises)
-        .then(([vertexShader, fragmentShader]) => {
-      this.material = new THREE.ShaderMaterial({
-        uniforms: {
-            light: { value: light.position },
-            water: { value: null },
-            envMap: { value: null },
-            skybox: { value: null },
-        },
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShader,
-      });
-      this.material.extensions = {
-        derivatives: true
-      };
-
-      this.mesh = new THREE.Mesh(this.geometry, this.material);
-      this.mesh.position.set(waterPosition.x, waterPosition.y, waterPosition.z);
+    this.material = new THREE.ShaderMaterial({
+      uniforms: {
+        light: { value: light.position },
+        water: { value: null },
+        envMap: { value: null },
+        skybox: { value: null },
+      },
+      vertexShader: waterVert,
+      fragmentShader: waterFrag,
     });
+    this.material.extensions = {
+      derivatives: true
+    };
+
+    this.mesh = new THREE.Mesh(this.geometry, this.material);
+    this.mesh.position.set(waterPosition.x, waterPosition.y, waterPosition.z);
   }
 
   setHeightTexture(waterTexture) {
@@ -394,19 +716,10 @@ class EnvironmentMap {
     this.size = 1024;
     this.target = new THREE.WebGLRenderTarget(this.size, this.size, {type: THREE.FloatType});
 
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment_mapping/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment_mapping/fragment.glsl')
-    ];
-
     this._meshes = [];
-
-    this.loaded = Promise.all(shadersPromises)
-        .then(([vertexShader, fragmentShader]) => {
-      this._material = new THREE.ShaderMaterial({
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShader,
-      });
+    this._material = new THREE.ShaderMaterial({
+      vertexShader: mapVert,
+      fragmentShader: mapFrag,
     });
   }
 
@@ -442,46 +755,38 @@ class Caustics {
 
     this._waterGeometry = new THREE.PlaneBufferGeometry(2, 2, waterSize, waterSize);
 
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/caustics/water_vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/caustics/water_fragment.glsl'),
-    ];
-
-    this.loaded = Promise.all(shadersPromises)
-        .then(([waterVertexShader, waterFragmentShader]) => {
-      this._waterMaterial = new THREE.ShaderMaterial({
-        uniforms: {
-          light: { value: light.position },
-          env: { value: null },
-          water: { value: null },
-          deltaEnvTexture: { value: null },
-        },
-        vertexShader: waterVertexShader,
-        fragmentShader: waterFragmentShader,
-        transparent: true,
-      });
-
-      this._waterMaterial.blending = THREE.CustomBlending;
-
-      // Set the blending so that:
-      // Caustics intensity uses an additive function
-      this._waterMaterial.blendEquation = THREE.AddEquation;
-      this._waterMaterial.blendSrc = THREE.OneFactor;
-      this._waterMaterial.blendDst = THREE.OneFactor;
-
-      // Caustics depth does not use blending, we just set the value
-      this._waterMaterial.blendEquationAlpha = THREE.AddEquation;
-      this._waterMaterial.blendSrcAlpha = THREE.OneFactor;
-      this._waterMaterial.blendDstAlpha = THREE.ZeroFactor;
-
-
-      this._waterMaterial.side = THREE.DoubleSide;
-      this._waterMaterial.extensions = {
-        derivatives: true
-      };
-
-      this._waterMesh = new THREE.Mesh(this._waterGeometry, this._waterMaterial);
+    this._waterMaterial = new THREE.ShaderMaterial({
+      uniforms: {
+        light: { value: light.position },
+        env: { value: null },
+        water: { value: null },
+        deltaEnvTexture: { value: null },
+      },
+      vertexShader: causticVert,
+      fragmentShader: causticFrag,
+      transparent: true,
     });
+
+    this._waterMaterial.blending = THREE.CustomBlending;
+
+    // Set the blending so that:
+    // Caustics intensity uses an additive function
+    this._waterMaterial.blendEquation = THREE.AddEquation;
+    this._waterMaterial.blendSrc = THREE.OneFactor;
+    this._waterMaterial.blendDst = THREE.OneFactor;
+
+    // Caustics depth does not use blending, we just set the value
+    this._waterMaterial.blendEquationAlpha = THREE.AddEquation;
+    this._waterMaterial.blendSrcAlpha = THREE.OneFactor;
+    this._waterMaterial.blendDstAlpha = THREE.ZeroFactor;
+
+
+    this._waterMaterial.side = THREE.DoubleSide;
+    this._waterMaterial.extensions = {
+      derivatives: true
+    };
+
+    this._waterMesh = new THREE.Mesh(this._waterGeometry, this._waterMaterial);
   }
 
   setDeltaEnvTexture(deltaEnvTexture) {
@@ -497,7 +802,7 @@ class Caustics {
     const oldTarget = renderer.getRenderTarget();
 
     renderer.setRenderTarget(this.target);
-    renderer.setClearColor(purple, 0.1);
+    renderer.setClearColor(black, 0);
     renderer.clear();
 
     renderer.render(this._waterMesh, lightCamera);
@@ -511,25 +816,16 @@ class Caustics {
 class Environment {
 
   constructor() {
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/environment/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/skyfly200/caustics-art/master/shaders/environment/fragment.glsl')
-    ];
-    
-
     this._meshes = [];
-
-    this.loaded = Promise.all(shadersPromises).then(([vertexShader, fragmentShader]) => {
-      this._material = new THREE.ShaderMaterial({
-        uniforms: {
-          light: { value: light.position },
-          caustics: { value: null },
-          lightProjectionMatrix: { value: lightCamera.projectionMatrix },
-          lightViewMatrix: { value: lightCamera.matrixWorldInverse  }
-        },
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShader,
-      });
+    this._material = new THREE.ShaderMaterial({
+      uniforms: {
+        light: { value: light.position },
+        caustics: { value: null },
+        lightProjectionMatrix: { value: lightCamera.projectionMatrix },
+        lightViewMatrix: { value: lightCamera.matrixWorldInverse  }
+      },
+      vertexShader: envVert,
+      fragmentShader: envFrag,
     });
   }
 
@@ -607,97 +903,91 @@ const debug = new Debug();
 // Main rendering loop
 function animate() {
   stats.begin();
-
-  // INPUTS
   
   // Rain
-  if (rain) {
-    if (Math.random() <= rainIntensity) {
+  if (raindrops) {
+    if (Math.random() <= intensity) {
       let size = Math.random() * 0.1;
       let mass = Math.random() * 0.1;
       mass = (Math.random() > 0.5) ? mass : mass * -1
-      waterSimulation.addDrop(
-        renderer,
-        Math.random() * 2 - 1, Math.random() * 2 - 1,
-        size, mass
-      );
+      let posX = randPos ? Math.random() * 2 - 1 : 0;
+      let posY = randPos ? Math.random() * 2 - 1 : 0;
+      waterSimulation.addDrop( renderer, posX, posY, size, mass );
     }
   }
   
   // Wind
-  if (wind) {
-    // threshold for a gust to start
-    if (!gusting && Math.random() <= windIntensity) {
-      gusting = true;
-      gustStartTime = new Date().getTime();
-      gustDuration = ((18 * Math.random()) + 2) * 1000;
-      gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustSize = Math.random() * 0.1 + 0.05;
-      gustMass = Math.random() * 0.01;
-      gustAmplitude = 0;
-      gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
-    }
-    if (gusting) {
-      var timeSinceGustStart = new Date().getTime() - gustStartTime;
-      if (timeSinceGustStart >= gustDuration) {
-        gusting = false;
-      } else {
-        gustAmplitude = gustEnvelope(timeSinceGustStart);
-        gustPosition = {
-          x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
-          y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
-        };
-        var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
-        var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
-        var numDroplets = Math.floor(gustAmplitude * 10);
-        for (var i = 0; i < numDroplets; i++) {
-          waterSimulation.addDrop(
-            renderer,
-            gustPosition.x + (Math.random() - 0.5) * dropletSize * 2,
-            gustPosition.y + (Math.random() - 0.5) * dropletSize * 2,
-            dropletSize,
-            dropletMass
-          );
-        }
+if (wind) {
+  // threshold for a gust to start
+  if (!gusting && Math.random() <= windIntensity) {
+    gusting = true;
+    gustStartTime = new Date().getTime();
+    gustDuration = ((18 * Math.random()) + 2) * 1000;
+    gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
+    gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
+    gustSize = Math.random() * 0.1 + 0.05;
+    gustMass = Math.random() * 0.01;
+    gustAmplitude = 0;
+    gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
+  }
+  if (gusting) {
+    var timeSinceGustStart = new Date().getTime() - gustStartTime;
+    if (timeSinceGustStart >= gustDuration) {
+      gusting = false;
+    } else {
+      gustAmplitude = gustEnvelope(timeSinceGustStart);
+      gustPosition = {
+        x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
+        y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
+      };
+      var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
+      var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
+      var numDroplets = Math.floor(gustAmplitude * 10);
+      for (var i = 0; i < numDroplets; i++) {
+        waterSimulation.addDrop(
+          renderer,
+          gustPosition.x + (Math.random() - 0.5) * dropletSize * 2,
+          gustPosition.y + (Math.random() - 0.5) * dropletSize * 2,
+          dropletSize,
+          dropletMass
+        );
       }
     }
   }
+}
 
-  function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
-    var attackDuration = attackTime * duration;
-    var decayDuration = decayTime * duration;
-    var releaseDuration = releaseTime * duration;
-    var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
-    return function (time) {
-      if (time <= attackDuration) {
-        return time / attackDuration;
-      } else if (time <= attackDuration + decayDuration) {
-        return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
-      } else if (time <= duration - releaseDuration) {
-        return sustainLevel;
-      } else {
-        return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
-      }
-    };
-  }
+function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
+var attackDuration = attackTime * duration;
+var decayDuration = decayTime * duration;
+var releaseDuration = releaseTime * duration;
+var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
+return function (time) {
+if (time <= attackDuration) {
+return time / attackDuration;
+} else if (time <= attackDuration + decayDuration) {
+return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
+} else if (time <= duration - releaseDuration) {
+return sustainLevel;
+} else {
+return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
+}
+};
+}
 
   // Update the water
   if (clock.getElapsedTime() > 0.032) {
     analyser.getByteFrequencyData(frequencyData);
-    // console.log(frequencyData);
     
-    // Sound reactive input
     if (soundReactive) {
       const responders = audioReactivityRules.responders;
       for (const r in responders) {
         let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
-        let posX = audioReactivityRules.randPos ? Math.random() * 2 - 1 : 0;
-        let posY = audioReactivityRules.randPos ? Math.random() * 2 - 1 : 0;
+        let posX = randPos ? Math.random() * 2 - 1 : 0;
+        let posY = randPos ? Math.random() * 2 - 1 : 0;
 
         if (responders[r].startBand === responders[r].endBand) {
           // Single band responder
-          if (audioReactivityRules.debugResponders) console.log(r, responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
+          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
           waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
         } else {
           // Range of bands responder

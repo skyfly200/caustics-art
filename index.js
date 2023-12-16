@@ -1,110 +1,69 @@
 // Caustics Art Project
 
-// Define your shaders as strings localy
+// Define shaders as strings locally
 const waterFrag = `
-    // TODO Make it a uniform
-    const float causticsFactor = 0.15;
+  uniform sampler2D envMap;
+  uniform samplerCube skybox;
 
-    varying vec3 oldPosition;
-    varying vec3 newPosition;
-    varying float waterDepth;
-    varying float depth;
+  varying vec2 refractedPosition[3];
+  varying vec3 reflected;
+  varying float reflectionFactor;
 
+  void main() {
+    // Color coming from the sky reflection
+    vec3 reflectedColor = textureCube(skybox, reflected).xyz;
 
-    void main() {
-      float causticsIntensity = 0.;
+    // Color coming from the environment refraction, applying chromatic aberration
+    vec3 refractedColor = vec3(1.);
+    refractedColor.r = texture2D(envMap, refractedPosition[0] * 0.5 + 0.5).r;
+    refractedColor.g = texture2D(envMap, refractedPosition[1] * 0.5 + 0.5).g;
+    refractedColor.b = texture2D(envMap, refractedPosition[2] * 0.5 + 0.5).b;
 
-      if (depth >= waterDepth) {
-        float oldArea = length(dFdx(oldPosition)) * length(dFdy(oldPosition));
-        float newArea = length(dFdx(newPosition)) * length(dFdy(newPosition));
-
-        float ratio;
-
-        // Prevent dividing by zero (debug NVidia drivers)
-        if (newArea == 0.) {
-          // Arbitrary large value
-          ratio = 2.0e+20;
-        } else {
-          ratio = oldArea / newArea;
-        }
-
-        causticsIntensity = causticsFactor * ratio;
-      }
-
-      gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
-    }
+    gl_FragColor = vec4(mix(refractedColor, reflectedColor, clamp(reflectionFactor, 0., 1.)), 1.);
+  }
 `;
 
 const waterVert = `
-    uniform vec3 light;
     uniform sampler2D water;
-    uniform sampler2D env;
-    uniform float deltaEnvTexture;
+    varying vec2 refractedPosition[3];
+    varying vec3 reflected;
+    varying float reflectionFactor;
 
-    varying vec3 oldPosition;
-    varying vec3 newPosition;
-    varying float waterDepth;
-    varying float depth;
+    const float refractionFactor = 1.;
+
+    const float fresnelBias = 0.1;
+    const float fresnelPower = 2.;
+    const float fresnelScale = 1.;
 
     // Air refractive index / Water refractive index
     const float eta = 0.7504;
 
-    // TODO Make this a uniform
-    // This is the maximum iterations when looking for the ray intersection with the environment,
-    // if after this number of attempts we did not find the intersection, the result will be wrong.
-    const int MAX_ITERATIONS = 50;
 
     void main() {
-      vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
+      vec4 info = texture2D(water, position.xy * 0.5 + 0.5);
 
       // The water position is the vertex position on which we apply the height-map
-      // TODO Remove the ugly hardcoded +0.8 for the water position
-      vec3 waterPosition = vec3(position.xy, position.z + waterInfo.r + 0.8);
-      vec3 waterNormal = normalize(vec3(waterInfo.b, sqrt(1.0 - dot(waterInfo.ba, waterInfo.ba)), waterInfo.a)).xzy;
+      vec3 pos = vec3(position.xy, position.z + info.r);
+      vec3 norm = normalize(vec3(info.b, sqrt(1.0 - dot(info.ba, info.ba)), info.a)).xzy;
 
-      // This is the initial position: the ray starting point
-      oldPosition = waterPosition;
+      vec3 eye = normalize(pos - cameraPosition);
+      vec3 refracted = normalize(refract(eye, norm, eta));
+      reflected = normalize(reflect(eye, norm));
 
-      // Compute water coordinates in the screen space
-      vec4 projectedWaterPosition = projectionMatrix * viewMatrix * vec4(waterPosition, 1.);
+      reflectionFactor = fresnelBias + fresnelScale * pow(1. + dot(eye, norm), fresnelPower);
 
-      vec2 currentPosition = projectedWaterPosition.xy;
-      vec2 coords = 0.5 + 0.5 * currentPosition;
+      mat4 proj = projectionMatrix * modelViewMatrix;
 
-      vec3 refracted = refract(light, waterNormal, eta);
-      vec4 projectedRefractionVector = projectionMatrix * viewMatrix * vec4(refracted, 1.);
+      vec4 projectedRefractedPosition = proj * vec4(pos + refractionFactor * refracted, 1.0);
+      refractedPosition[0] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
 
-      vec3 refractedDirection = projectedRefractionVector.xyz;
+      projectedRefractedPosition = proj * vec4(pos + refractionFactor * normalize(refract(eye, norm, eta * 0.96)), 1.0);
+      refractedPosition[1] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
 
-      waterDepth = 0.5 + 0.5 * projectedWaterPosition.z / projectedWaterPosition.w;
-      float currentDepth = projectedWaterPosition.z;
-      vec4 environment = texture2D(env, coords);
+      projectedRefractedPosition = proj * vec4(pos + refractionFactor * normalize(refract(eye, norm, eta * 0.92)), 1.0);
+      refractedPosition[2] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
 
-      // This factor will scale the delta parameters so that we move from one pixel to the other in the env map
-      float factor = deltaEnvTexture / length(refractedDirection.xy);
-
-      vec2 deltaDirection = refractedDirection.xy * factor;
-      float deltaDepth = refractedDirection.z * factor;
-
-      for (int i = 0; i < MAX_ITERATIONS; i++) {
-        // Move the coords in the direction of the refraction
-        currentPosition += deltaDirection;
-        currentDepth += deltaDepth;
-
-        // End of loop condition: The ray has hit the environment
-        if (environment.w <= currentDepth) {
-          break;
-        }
-
-        environment = texture2D(env, 0.5 + 0.5 * currentPosition);
-      }
-
-      newPosition = environment.xyz;
-
-      vec4 projectedEnvPosition = projectionMatrix * viewMatrix * vec4(newPosition, 1.0);
-      depth = 0.5 + 0.5 * projectedEnvPosition.z / projectedEnvPosition.w;
-
-      gl_Position = projectedEnvPosition;
+      gl_Position = proj * vec4(pos, 1.0);
     }
 `;
 
@@ -393,10 +352,10 @@ const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = false;
+let soundReactive = true;
 let mouseReactive = false;
 let focusWater = false;
-let randPos = false;
+let randPos = true;
 // TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 32768,
@@ -417,12 +376,12 @@ let audioReactivityRules = {
     // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
 let randomStart = false;
 let startDrops = 33;
-let raindrops = true;
+let raindrops = false;
 let intensity = 0.033;
 let wind = false;
 let windIntensity = 0.01;
 let geometryType = "polygon";
-let polygonSides = 24; 
+let polygonSides = 34;
 
 // state vars for simulating water effects
 let gusting = false;
@@ -458,7 +417,7 @@ const waterSize = 1024;
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
 camera.position.set(0, 0, 2.25);
-camera.up.set(0, 0, 1);
+camera.up.set(1, 0, 1);
 scene.add(camera);
 
 // Create directional light
@@ -700,13 +659,12 @@ class Water {
   setHeightTexture(waterTexture) {
     this.material.uniforms['water'].value = waterTexture;
   }
-
+  
   setEnvMapTexture(envMap) {
     this.material.uniforms['envMap'].value = envMap;
   }
 
 }
-
 
 // This renders the environment map seen from the light POV.
 // The resulting texture contains (posx, posy, posz, depth) in the colors channels.

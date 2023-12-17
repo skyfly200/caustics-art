@@ -796,113 +796,12 @@ class Environment {
 
 }
 
-class Debug {
-  constructor() {
-    const debugFrag = `
-      precision highp float;
-      precision highp int;
-      uniform sampler2D texture;
-      varying vec2 coord;
-      void main() {
-        vec4 color = texture2D(texture, coord);
-        gl_FragColor = vec4(color.x, color.y, color.z, 1.);
-      }
-    `
-    const debugVert = `
-      uniform sampler2D texture;
-      attribute vec3 position;
-      varying vec2 coord;
-      void main() {
-        coord = position.xy + 0.5;
-        gl_Position = vec4(position.xy * 2., 0., 1.);
-      }
-    `
-    this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 1);
-    this._geometry = new THREE.PlaneBufferGeometry();
-    this._material = new THREE.RawShaderMaterial({
-      uniforms: {
-        texture: { value: null },
-      },
-      vertexShader: debugVert,
-      fragmentShader: debugFrag,
-    });
-    this._mesh = new THREE.Mesh(this._geometry, this._material);
-    this._material.transparent = true;
-  }
-  draw(renderer, texture) {
-    this._material.uniforms['texture'].value = texture;
-
-    const oldTarget = renderer.getRenderTarget();
-
-    renderer.setRenderTarget(null);
-    renderer.render(this._mesh, this._camera);
-
-    renderer.setRenderTarget(oldTarget);
-  }
-}
-
 const waterSimulation = new WaterSimulation();
 const water = new Water();
 const environmentMap = new EnvironmentMap();
 const environment = new Environment();
 const caustics = new Caustics();
 const debug = new Debug();
-
-// Main rendering loop
-function animate() {
-  stats.begin();
-  
-  // Rain
-  if (raindrops) {
-    if (Math.random() <= intensity) {
-      let size = Math.random() * 0.1;
-      let mass = Math.random() * 0.1;
-      mass = (Math.random() > 0.5) ? mass : mass * -1
-      let posX = randPos ? Math.random() * 2 - 1 : 0;
-      let posY = randPos ? Math.random() * 2 - 1 : 0;
-      waterSimulation.addDrop( renderer, posX, posY, size, mass );
-    }
-  }
-  
-  // Wind
-if (wind) {
-  // threshold for a gust to start
-  if (!gusting && Math.random() <= windIntensity) {
-    gusting = true;
-    gustStartTime = new Date().getTime();
-    gustDuration = ((18 * Math.random()) + 2) * 1000;
-    gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-    gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-    gustSize = Math.random() * 0.1 + 0.05;
-    gustMass = Math.random() * 0.01;
-    gustAmplitude = 0;
-    gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
-  }
-  if (gusting) {
-    var timeSinceGustStart = new Date().getTime() - gustStartTime;
-    if (timeSinceGustStart >= gustDuration) {
-      gusting = false;
-    } else {
-      gustAmplitude = gustEnvelope(timeSinceGustStart);
-      gustPosition = {
-        x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
-        y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
-      };
-      var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
-      var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
-      var numDroplets = Math.floor(gustAmplitude * 10);
-      for (var i = 0; i < numDroplets; i++) {
-        waterSimulation.addDrop(
-          renderer,
-          gustPosition.x + (Math.random() - 0.5) * dropletSize * 2,
-          gustPosition.y + (Math.random() - 0.5) * dropletSize * 2,
-          dropletSize,
-          dropletMass
-        );
-      }
-    }
-  }
-}
 
 function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
   var attackDuration = attackTime * duration;
@@ -921,6 +820,61 @@ function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) 
     }
   };
 }
+
+// Main rendering loop
+function animate() {
+  stats.begin();
+  
+  // Rain
+  if (raindrops) {
+    if (Math.random() <= intensity) {
+      let size = Math.random() * 0.1;
+      let mass = Math.random() * 0.1;
+      mass = (Math.random() > 0.5) ? mass : mass * -1
+      let posX = randPos ? Math.random() * 2 - 1 : 0;
+      let posY = randPos ? Math.random() * 2 - 1 : 0;
+      waterSimulation.addDrop( renderer, posX, posY, size, mass );
+    }
+  }
+  // Wind
+  if (wind) {
+    // threshold for a gust to start
+    if (!gusting && Math.random() <= windIntensity) {
+      gusting = true;
+      gustStartTime = new Date().getTime();
+      gustDuration = ((18 * Math.random()) + 2) * 1000;
+      gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
+      gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
+      gustSize = Math.random() * 0.1 + 0.05;
+      gustMass = Math.random() * 0.01;
+      gustAmplitude = 0;
+      gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
+    }
+    if (gusting) {
+      var timeSinceGustStart = new Date().getTime() - gustStartTime;
+      if (timeSinceGustStart >= gustDuration) {
+        gusting = false;
+      } else {
+        gustAmplitude = gustEnvelope(timeSinceGustStart);
+        gustPosition = {
+          x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
+          y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
+        };
+        var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
+        var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
+        var numDroplets = Math.floor(gustAmplitude * 10);
+        for (var i = 0; i < numDroplets; i++) {
+          waterSimulation.addDrop(
+            renderer,
+            gustPosition.x + (Math.random() - 0.5) * dropletSize * 2,
+            gustPosition.y + (Math.random() - 0.5) * dropletSize * 2,
+            dropletSize,
+            dropletMass
+          );
+        }
+      }
+    }
+  }
 
   // Update the water
   if (clock.getElapsedTime() > 0.032) {
@@ -951,21 +905,15 @@ function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) 
     }
 
     waterSimulation.stepSimulation(renderer);
-
     const waterTexture = waterSimulation.target.texture;
-
     water.setHeightTexture(waterTexture);
 
     environmentMap.render(renderer);
     const environmentMapTexture = environmentMap.target.texture;
-
     caustics.setTextures(waterTexture, environmentMapTexture);
+    
     caustics.render(renderer);
     const causticsTexture = caustics.target.texture;
-
-    // debug.draw(renderer, environmentMapTexture);
-    // debug.draw(renderer, causticsTexture);
-
     environment.updateCaustics(causticsTexture);
 
     clock.start();

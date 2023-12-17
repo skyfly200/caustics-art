@@ -76,6 +76,7 @@ const envVert = `
     varying float lightIntensity;
     varying vec3 lightPosition;
 
+
     void main(void){
       lightIntensity = - dot(light, normalize(normal));
 
@@ -168,6 +169,7 @@ const causticFrag = `
     varying float waterDepth;
     varying float depth;
 
+
     void main() {
       float causticsIntensity = 0.;
 
@@ -210,6 +212,7 @@ const causticVert = `
     // This is the maximum iterations when looking for the ray intersection with the environment,
     // if after this number of attempts we did not find the intersection, the result will be wrong.
     const int MAX_ITERATIONS = 50;
+
 
     void main() {
       vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
@@ -371,7 +374,7 @@ let audioReactivityRules = {
     // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
     // { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
     // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
-let randomStart = false;
+let randomStart = true;
 let startDrops = 33;
 let raindrops = false;
 let intensity = 0.033;
@@ -392,22 +395,13 @@ let gustMass;
 const black = new THREE.Color('black');
 const white = new THREE.Color('white');
 
-function loadFile(filename) {
-  return new Promise((resolve, reject) => {
-    const loader = new THREE.FileLoader();
-
-    loader.load(filename, (data) => {
-      resolve(data);
-    });
-  });
-}
-
 // Constants
 const waterPosition = new THREE.Vector3(0, 0, 4);
 const surfacePosition = new THREE.Vector3(0, 0, 0);
 const near = 0;
 const far = 4;
 const waterSize = 1024;
+
 
 // Create Renderer
 const scene = new THREE.Scene();
@@ -785,7 +779,6 @@ class Environment {
 
   setGeometries(geometries) {
     this._meshes = [];
-
     for (let geometry of geometries) {
       this._meshes.push(new THREE.Mesh(geometry, this._material));
     }
@@ -803,33 +796,39 @@ class Environment {
 
 }
 
-
 class Debug {
-
   constructor() {
+    const debugFrag = `
+      precision highp float;
+      precision highp int;
+      uniform sampler2D texture;
+      varying vec2 coord;
+      void main() {
+        vec4 color = texture2D(texture, coord);
+        gl_FragColor = vec4(color.x, color.y, color.z, 1.);
+      }
+    `
+    const debugVert = `
+      uniform sampler2D texture;
+      attribute vec3 position;
+      varying vec2 coord;
+      void main() {
+        coord = position.xy + 0.5;
+        gl_Position = vec4(position.xy * 2., 0., 1.);
+      }
+    `
     this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 1);
     this._geometry = new THREE.PlaneBufferGeometry();
-
-    const shadersPromises = [
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/debug/vertex.glsl'),
-      loadFile('https://raw.githubusercontent.com/martinRenou/threejs-caustics/master/shaders/debug/fragment.glsl')
-    ];
-
-    this.loaded = Promise.all(shadersPromises)
-        .then(([vertexShader, fragmentShader]) => {
-      this._material = new THREE.RawShaderMaterial({
-        uniforms: {
-            texture: { value: null },
-        },
-        vertexShader: vertexShader,
-        fragmentShader: fragmentShader,
-      });
-
-      this._mesh = new THREE.Mesh(this._geometry, this._material);
-      this._material.transparent = true;
+    this._material = new THREE.RawShaderMaterial({
+      uniforms: {
+        texture: { value: null },
+      },
+      vertexShader: debugVert,
+      fragmentShader: debugFrag,
     });
+    this._mesh = new THREE.Mesh(this._geometry, this._material);
+    this._material.transparent = true;
   }
-
   draw(renderer, texture) {
     this._material.uniforms['texture'].value = texture;
 
@@ -840,19 +839,14 @@ class Debug {
 
     renderer.setRenderTarget(oldTarget);
   }
-
 }
 
 const waterSimulation = new WaterSimulation();
-
 const water = new Water();
-
 const environmentMap = new EnvironmentMap();
 const environment = new Environment();
 const caustics = new Caustics();
-
 const debug = new Debug();
-
 
 // Main rendering loop
 function animate() {
@@ -911,21 +905,21 @@ if (wind) {
 }
 
 function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
-var attackDuration = attackTime * duration;
-var decayDuration = decayTime * duration;
-var releaseDuration = releaseTime * duration;
-var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
-return function (time) {
-if (time <= attackDuration) {
-return time / attackDuration;
-} else if (time <= attackDuration + decayDuration) {
-return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
-} else if (time <= duration - releaseDuration) {
-return sustainLevel;
-} else {
-return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
-}
-};
+  var attackDuration = attackTime * duration;
+  var decayDuration = decayTime * duration;
+  var releaseDuration = releaseTime * duration;
+  var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
+  return function (time) {
+    if (time <= attackDuration) {
+      return time / attackDuration;
+    } else if (time <= attackDuration + decayDuration) {
+      return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
+    } else if (time <= duration - releaseDuration) {
+      return sustainLevel;
+    } else {
+      return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
+    }
+  };
 }
 
   // Update the water

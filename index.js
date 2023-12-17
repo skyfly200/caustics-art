@@ -557,9 +557,12 @@ class WaterSimulation {
 
   // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])
   addDrop(renderer, x, y, radius, strength) {
-    this._dropMesh.material.uniforms['center'].value = [x, y];
-    this._dropMesh.material.uniforms['radius'].value = radius;
-    this._dropMesh.material.uniforms['strength'].value = strength;
+    const { uniforms } = this._dropMesh.material;
+    Object.assign(uniforms, {
+      'center': { value: [x, y] },
+      'radius': { value: radius },
+      'strength': { value: strength }
+    });
     this._render(renderer, this._dropMesh);
   }
 

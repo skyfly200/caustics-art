@@ -423,11 +423,6 @@ scene.add(light);
 light.target.position.set(0, 0, 0);
 scene.add(light.target);
 
-// Offset RGB channels
-light.color.r += 0.2; // offset red channel
-light.color.g -= 0.1; // offset green channel
-light.color.b += 0.1; // offset blue channel
-
 const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true, alpha: true});
 renderer.setSize(width, height);
 renderer.autoClear = false;

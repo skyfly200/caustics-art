@@ -887,41 +887,30 @@ function animate() {
   renderer.setRenderTarget(temporaryRenderTarget);
   renderer.setClearColor(white, 1);
   renderer.clear();
-
   water.mesh.visible = false;
   renderer.render(scene, camera);
-
   water.setEnvMapTexture(temporaryRenderTarget.texture);
 
   // Then render the final scene with the refractive water
   renderer.setRenderTarget(null);
   renderer.setClearColor(white, 1);
   renderer.clear();
-
   water.mesh.visible = true;
   renderer.render(scene, camera);
-
   controls.update();
-
   stats.end();
-
   window.requestAnimationFrame(animate);
 }
 
 function onMouseMove(event) {
   if (mouseReactive) {
     const rect = canvas.getBoundingClientRect();
-
     mouse.x = (event.clientX - rect.left) * 2 / width - 1;
     mouse.y = - (event.clientY - rect.top) * 2 / height + 1;
-
     raycaster.setFromCamera(mouse, camera);
-
     const intersects = raycaster.intersectObject(targetmesh);
-
-    for (let intersect of intersects) {
+    for (let intersect of intersects)
       waterSimulation.addDrop(renderer, intersect.point.x, intersect.point.y, 0.03, 0.02);
-    }
   }
 }
 
@@ -948,14 +937,12 @@ Promise.all(loaded).then(() => {
   canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
 
   // Random starting drops
-  if (randomStart) {
-    for (var i = 0; i < startDrops; i++) {
-      waterSimulation.addDrop(
+  for (var i = 0; i < randomStart ? startDrops : 0; i++) {
+    waterSimulation.addDrop(
         renderer,
         Math.random() * 2 - 1, Math.random() * 2 - 1,
         0.05, (i & 1) ? 0.05 : -0.05
-      );
-    }
+    );
   }
 
   animate();

@@ -744,29 +744,25 @@ class Environment {
 
 }
 
+function createADSR(attack, decay, sustain, release, duration) {
+  return function (time) {
+    var attackDur = attack * duration, decayDur = decay * duration, releaseDur = release * duration;
+    var sustainDur = duration - attackDur - decayDur - releaseDur;
+    if (time <= attackDur) {
+      return time / attackDur;
+    } 
+    if (time <= attackDur + decayDur) {
+      return (1 - sustain) * (1 - (time - attackDur) / decayDur) + sustain;
+    } 
+    return time <= duration - releaseDur ? sustain : sustain * (1 - (time - (duration - releaseDur)) / releaseDur);
+  };
+}
+
 const waterSimulation = new WaterSimulation();
 const water = new Water();
 const environmentMap = new EnvironmentMap();
 const environment = new Environment();
 const caustics = new Caustics();
-
-function createADSR(attackTime, decayTime, sustainLevel, releaseTime, duration) {
-  var attackDuration = attackTime * duration;
-  var decayDuration = decayTime * duration;
-  var releaseDuration = releaseTime * duration;
-  var sustainDuration = duration - attackDuration - decayDuration - releaseDuration;
-  return function (time) {
-    if (time <= attackDuration) {
-      return time / attackDuration;
-    } else if (time <= attackDuration + decayDuration) {
-      return (1 - sustainLevel) * (1 - (time - attackDuration) / decayDuration) + sustainLevel;
-    } else if (time <= duration - releaseDuration) {
-      return sustainLevel;
-    } else {
-      return sustainLevel * (1 - (time - (duration - releaseDuration)) / releaseDuration);
-    }
-  };
-}
 
 // Main rendering loop
 function animate() {
@@ -915,6 +911,6 @@ Promise.all(loaded).then(() => {
   caustics.setDeltaEnvTexture(1. / environmentMap.size);
   canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
   for (var i = 0; i < randomStart ? startDrops : 0; i++)
-    waterSimulation.addDrop(renderer, Math.random() * 2 - 1, Math.random() * 2 - 1, 0.05, (i & 1) ? 0.05 : -0.05 );
+    waterSimulation.addDrop(renderer, Math.random()*2-1, Math.random()*2-1, 0.05, 0.05*(i&1||-1));
   animate();
 });

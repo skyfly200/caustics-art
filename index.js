@@ -513,7 +513,6 @@ class EnvironmentMap {
   constructor() {
     this.size = 1024;
     this.target = new THREE.WebGLRenderTarget(this.size, this.size, {type: THREE.FloatType});
-
     this._meshes = [];
     this._material = new THREE.ShaderMaterial({
       vertexShader: mapVert,
@@ -523,23 +522,17 @@ class EnvironmentMap {
 
   setGeometries(geometries) {
     this._meshes = [];
-
-    for (let geometry of geometries) {
+    for (let geometry of geometries)
       this._meshes.push(new THREE.Mesh(geometry, this._material));
-    }
   }
 
   render(renderer) {
     const oldTarget = renderer.getRenderTarget();
-
     renderer.setRenderTarget(this.target);
     renderer.setClearColor(black, 0);
     renderer.clear();
-
-    for (let mesh of this._meshes) {
+    for (let mesh of this._meshes)
       renderer.render(mesh, lightCamera);
-    }
-
     renderer.setRenderTarget(oldTarget);
   }
 
@@ -567,8 +560,7 @@ class Caustics {
 
     this._waterMaterial.blending = THREE.CustomBlending;
 
-    // Set the blending so that:
-    // Caustics intensity uses an additive function
+    // Caustics intensity uses an additive blending
     this._waterMaterial.blendEquation = THREE.AddEquation;
     this._waterMaterial.blendSrc = THREE.OneFactor;
     this._waterMaterial.blendDst = THREE.OneFactor;
@@ -577,12 +569,8 @@ class Caustics {
     this._waterMaterial.blendEquationAlpha = THREE.AddEquation;
     this._waterMaterial.blendSrcAlpha = THREE.OneFactor;
     this._waterMaterial.blendDstAlpha = THREE.ZeroFactor;
-
-
     this._waterMaterial.side = THREE.DoubleSide;
-    this._waterMaterial.extensions = {
-      derivatives: true
-    };
+    this._waterMaterial.extensions = {derivatives: true};
 
     this._waterMesh = new THREE.Mesh(this._waterGeometry, this._waterMaterial);
   }

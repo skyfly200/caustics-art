@@ -428,19 +428,12 @@ renderer.setSize(width, height);
 renderer.autoClear = false;
 renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
-// TODO: Replace OrbitControls lib with three.js core solution
-
 // Create mouse Controls
-const controls = new THREE.OrbitControls(
-  camera,
-  canvas
-);
+const controls = new THREE.OrbitControls(camera, canvas);
 
 controls.target = focusWater ? waterPosition : surfacePosition;
-
 controls.minPolarAngle = 0;
 controls.maxPolarAngle = Math.PI / 2. - 0.1;
-
 controls.minDistance = 0.1;
 controls.maxDistance = 7;
 

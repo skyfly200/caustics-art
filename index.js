@@ -354,8 +354,6 @@ analyser.fftSize = audioReactivityRules.bandCount;
 let frequencyData;
 let micLoaded;
 
-// TODO: pull out this into a seperate function
-
 try {
   // Get the microphone stream
   micLoaded = navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then( (value) => {
@@ -395,7 +393,6 @@ const targetmesh = new THREE.Mesh(targetgeometry);
 const waterGeometry = new THREE.PlaneBufferGeometry(2, 2, waterSize, waterSize);
 const vertices = new Float32Array([-1,-1,-1,-1,-1,1,-1,1,-1,-1,1,1,1,-1,-1,1,1,-1,1,-1,1,1,-1,-1,1,1,-1,-1,1,1,-1,-1,-1,-1,1,-1,1,1,-1,1,1,1,1,1,-1,-1,1,-1,1,-1,1,-1,-1,1,1,-1,1,1,1,1]);
 const indices = new Uint32Array([0,1,2,2,1,3,4,5,6,6,5,7,12,13,14,14,13,15,16,17,18,18,17,19,20,21,22,22,21,23]);
-
 
 // Environment
 const floorGeometry = new THREE.PlaneBufferGeometry(100, 100, 1, 1);
@@ -473,7 +470,6 @@ class WaterSimulation {
 
 }
 
-
 class Water {
 
   constructor() {
@@ -537,7 +533,6 @@ class EnvironmentMap {
   }
 
 }
-
 
 class Caustics {
 

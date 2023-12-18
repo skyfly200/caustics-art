@@ -382,8 +382,6 @@ document.onkeyup = function(e) {
 
 // Target for computing the water refraction
 const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);
-
-// Clock
 const clock = new THREE.Clock();
 
 // Ray caster

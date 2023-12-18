@@ -276,8 +276,8 @@ let raindrops = true;
 let intensity = 0.033;
 let wind = false;
 let windIntensity = 0.01;
-let geometryType = "plane";
-let polygonSides = 4;
+let geometryType = "polygon";
+let polygonSides = 6;
 
 // Audio Reactivity Settings
 let audioReactivityRules = {
@@ -324,7 +324,7 @@ const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far
 lightCamera.position.set(0., 0., far);
 lightCamera.lookAt(0, 0, 0);
 
-const light = new THREE.DirectionalLight(0x44aaff, 1);
+const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(0, 0, -1);
 scene.add(light);
 light.target.position.set(0, 0, 0);
@@ -336,14 +336,14 @@ renderer.autoClear = false;
 renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
 // Create mouse Controls
-const controls = new THREE.OrbitControls(camera, canvas);
-Object.assign(controls, {
-    target: focusWater ? waterPosition : surfacePosition,
-    minPolarAngle: 0,
-    maxPolarAngle: Math.PI / 2 - 0.1,
-    minDistance: 0.1,
-    maxDistance: 7
-});
+// const controls = new THREE.OrbitControls(camera, canvas);
+// Object.assign(controls, {
+//     target: focusWater ? waterPosition : surfacePosition,
+//     minPolarAngle: 0,
+//     maxPolarAngle: Math.PI / 2 - 0.1,
+//     minDistance: 0.1,
+//     maxDistance: 7
+// });
 
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
@@ -752,7 +752,7 @@ function animate() {
   renderer.clear();
   water.mesh.visible = true;
   renderer.render(scene, camera);
-  controls.update();
+  //controls.update();
   stats.end();
   window.requestAnimationFrame(animate);
 }

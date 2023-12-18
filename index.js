@@ -384,11 +384,6 @@ document.onkeyup = function(e) {
     // Change camera focus
     focusWater = !focusWater;
   }
-  // } else if (e.ctrlKey && e.altKey && e.which == 89) {
-  //   alert("Ctrl + Alt + Y shortcut combination was pressed");
-  // } else if (e.ctrlKey && e.altKey && e.shiftKey && e.which == 85) {
-  //   alert("Ctrl + Alt + Shift + U shortcut combination was pressed");
-  // }
 };
 
 // Target for computing the water refraction

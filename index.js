@@ -369,22 +369,16 @@ try {
   });
 } finally {}
 
-// Setup keyboard commands
 document.onkeyup = function(e) {
-  console.log(e.which);
-  if (e.which == 77) { // M
-    soundReactive = !soundReactive;
-  } else if (e.which == 82) { // R
-    raindrops = !raindrops;
-  } else if (e.which == 87) { // W
-    wind = !wind;
-  } else if (e.which == 65) { // C
-    // clear the water surface
-  } else if (e.which == 68) { // F
-    // Change camera focus
-    focusWater = !focusWater;
-  }
-};
+    console.log(e.key);
+    switch(e.key) {
+      case 'm': soundReactive = !soundReactive; break;
+      case 'r': raindrops = !raindrops; break;
+      case 'w': wind = !wind; break;
+      case 'a': /* clear the water surface */ break;
+      case 'd': focusWater = !focusWater; break;
+    }
+  };
 
 // Target for computing the water refraction
 const temporaryRenderTarget = new THREE.WebGLRenderTarget(width, height);

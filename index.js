@@ -1,82 +1,60 @@
 // Caustics Art Project
 
-// Define shaders as strings locally
+// Shaders
 const waterFrag = `
   uniform sampler2D envMap;
   uniform samplerCube skybox;
-
   varying vec2 refractedPosition[3];
   varying vec3 reflected;
   varying float reflectionFactor;
-
   void main() {
     // Color coming from the sky reflection
     vec3 reflectedColor = textureCube(skybox, reflected).xyz;
-
     // Color coming from the environment refraction, applying chromatic aberration
     vec3 refractedColor = vec3(1.);
     refractedColor.r = texture2D(envMap, refractedPosition[0] * 0.5 + 0.5).r;
     refractedColor.g = texture2D(envMap, refractedPosition[1] * 0.5 + 0.5).g;
     refractedColor.b = texture2D(envMap, refractedPosition[2] * 0.5 + 0.5).b;
-
     gl_FragColor = vec4(mix(refractedColor, reflectedColor, clamp(reflectionFactor, 0., 1.)), 1.);
   }
 `;
-
 const waterVert = `
     uniform sampler2D water;
     varying vec2 refractedPosition[3];
     varying vec3 reflected;
     varying float reflectionFactor;
-
     const float refractionFactor = 1.;
-
     const float fresnelBias = 0.1;
     const float fresnelPower = 2.;
     const float fresnelScale = 1.;
-
     // Air refractive index / Water refractive index
     const float eta = 0.7504;
-
-
     void main() {
       vec4 info = texture2D(water, position.xy * 0.5 + 0.5);
-
       // The water position is the vertex position on which we apply the height-map
       vec3 pos = vec3(position.xy, position.z + info.r);
       vec3 norm = normalize(vec3(info.b, sqrt(1.0 - dot(info.ba, info.ba)), info.a)).xzy;
-
       vec3 eye = normalize(pos - cameraPosition);
       vec3 refracted = normalize(refract(eye, norm, eta));
       reflected = normalize(reflect(eye, norm));
-
       reflectionFactor = fresnelBias + fresnelScale * pow(1. + dot(eye, norm), fresnelPower);
-
       mat4 proj = projectionMatrix * modelViewMatrix;
-
       vec4 projectedRefractedPosition = proj * vec4(pos + refractionFactor * refracted, 1.0);
       refractedPosition[0] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
-
       projectedRefractedPosition = proj * vec4(pos + refractionFactor * normalize(refract(eye, norm, eta * 0.96)), 1.0);
       refractedPosition[1] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
-
       projectedRefractedPosition = proj * vec4(pos + refractionFactor * normalize(refract(eye, norm, eta * 0.92)), 1.0);
       refractedPosition[2] = projectedRefractedPosition.xy / projectedRefractedPosition.w;
-
       gl_Position = proj * vec4(pos, 1.0);
     }
 `;
-
 const envVert = `
     uniform vec3 light;
     // Light projection matrix
     uniform mat4 lightProjectionMatrix;
     uniform mat4 lightViewMatrix;
-
     varying float lightIntensity;
     varying vec3 lightPosition;
-
-
     void main(void){
       lightIntensity = - dot(light, normalize(normal));
 
@@ -89,18 +67,13 @@ const envVert = `
       gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.);
     }
 `;
-
 const envFrag = `
   uniform sampler2D caustics;
   varying float lightIntensity;
   varying vec3 lightPosition;
-
   const float bias = 0.001;
-
   const vec3 underwaterColor = vec3(0.2, 0.2, 0.2);
-
   const vec2 resolution = vec2(1024.);
-
   float blur(sampler2D image, vec2 uv, vec2 resolution, vec2 direction) {
     float intensity = 0.;
     vec2 off1 = vec2(1.3846153846) * direction;
@@ -112,30 +85,23 @@ const envFrag = `
     intensity += texture2D(image, uv - (off2 / resolution)).x * 0.0702702703;
     return intensity;
   }
-
   void main() {
     // Set the frag color
     float computedLightIntensity = 0.5;
-
     computedLightIntensity += 0.2 * lightIntensity;
-
     // Retrieve caustics depth information
     float causticsDepth = texture2D(caustics, lightPosition.xy).w;
-
     if (causticsDepth > lightPosition.z - bias) {
       // Percentage Close Filtering
       float causticsIntensity = 0.5 * (
         blur(caustics, lightPosition.xy, resolution, vec2(0., 0.5)) +
         blur(caustics, lightPosition.xy, resolution, vec2(0.5, 0.))
       );
-
       computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
     }
-
     gl_FragColor = vec4(underwaterColor * computedLightIntensity, 1.);
   }
 `;
-
 const mapFrag = `
     varying vec4 worldPosition;
     varying float depth;
@@ -143,24 +109,19 @@ const mapFrag = `
       gl_FragColor = vec4(worldPosition.xyz, depth);
     }
 `;
-
 const mapVert = `
     varying vec4 worldPosition;
     varying float depth;
     void main() {
       // Compute world position
       worldPosition = modelMatrix * vec4(position, 1.);
-
       // Project vertex in the screen coordinates
       vec4 projectedPosition = projectionMatrix * viewMatrix * worldPosition;
-
       // Store vertex depth
       depth = projectedPosition.z;
-
       gl_Position = projectedPosition;
     }
 `;
-
 const causticFrag = `
     // TODO Make it a uniform
     const float causticsFactor = 0.15;
@@ -168,17 +129,12 @@ const causticFrag = `
     varying vec3 newPosition;
     varying float waterDepth;
     varying float depth;
-
-
     void main() {
       float causticsIntensity = 0.;
-
       if (depth >= waterDepth) {
         float oldArea = length(dFdx(oldPosition)) * length(dFdy(oldPosition));
         float newArea = length(dFdx(newPosition)) * length(dFdy(newPosition));
-
         float ratio;
-
         // Prevent dividing by zero (debug NVidia drivers)
         if (newArea == 0.) {
           // Arbitrary large value
@@ -186,100 +142,72 @@ const causticFrag = `
         } else {
           ratio = oldArea / newArea;
         }
-
         causticsIntensity = causticsFactor * ratio;
       }
-
       gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
     }
 `;
-
 const causticVert = `
     uniform vec3 light;
     uniform sampler2D water;
     uniform sampler2D env;
     uniform float deltaEnvTexture;
-
     varying vec3 oldPosition;
     varying vec3 newPosition;
     varying float waterDepth;
     varying float depth;
-
     // Air refractive index / Water refractive index
     const float eta = 0.7504;
-
     // TODO Make this a uniform
     // This is the maximum iterations when looking for the ray intersection with the environment,
     // if after this number of attempts we did not find the intersection, the result will be wrong.
     const int MAX_ITERATIONS = 50;
-
-
     void main() {
       vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
-
       // The water position is the vertex position on which we apply the height-map
       // TODO Remove the ugly hardcoded +0.8 for the water position
       vec3 waterPosition = vec3(position.xy, position.z + waterInfo.r + 0.8);
       vec3 waterNormal = normalize(vec3(waterInfo.b, sqrt(1.0 - dot(waterInfo.ba, waterInfo.ba)), waterInfo.a)).xzy;
-
       // This is the initial position: the ray starting point
       oldPosition = waterPosition;
-
       // Compute water coordinates in the screen space
       vec4 projectedWaterPosition = projectionMatrix * viewMatrix * vec4(waterPosition, 1.);
-
       vec2 currentPosition = projectedWaterPosition.xy;
       vec2 coords = 0.5 + 0.5 * currentPosition;
-
       vec3 refracted = refract(light, waterNormal, eta);
       vec4 projectedRefractionVector = projectionMatrix * viewMatrix * vec4(refracted, 1.);
-
       vec3 refractedDirection = projectedRefractionVector.xyz;
-
       waterDepth = 0.5 + 0.5 * projectedWaterPosition.z / projectedWaterPosition.w;
       float currentDepth = projectedWaterPosition.z;
       vec4 environment = texture2D(env, coords);
-
       // This factor will scale the delta parameters so that we move from one pixel to the other in the env map
       float factor = deltaEnvTexture / length(refractedDirection.xy);
-
       vec2 deltaDirection = refractedDirection.xy * factor;
       float deltaDepth = refractedDirection.z * factor;
-
       for (int i = 0; i < MAX_ITERATIONS; i++) {
         // Move the coords in the direction of the refraction
         currentPosition += deltaDirection;
         currentDepth += deltaDepth;
-
         // End of loop condition: The ray has hit the environment
-        if (environment.w <= currentDepth) {
+        if (environment.w <= currentDepth)
           break;
-        }
-
         environment = texture2D(env, 0.5 + 0.5 * currentPosition);
       }
-
       newPosition = environment.xyz;
-
       vec4 projectedEnvPosition = projectionMatrix * viewMatrix * vec4(newPosition, 1.0);
       depth = 0.5 + 0.5 * projectedEnvPosition.z / projectedEnvPosition.w;
-
       gl_Position = projectedEnvPosition;
     }
 `;
-
 const simUpdateFrag = `
     precision highp float;
     precision highp int;
-
     uniform sampler2D texture;
     uniform vec2 delta;
     varying vec2 coord;
-
     void main() {
       /* get vertex info */
       vec4 info = texture2D(texture, coord);
-
       /* calculate average neighbor height */
       vec2 dx = vec2(delta.x, 0.0);
       vec2 dy = vec2(0.0, delta.y);
@@ -289,49 +217,38 @@ const simUpdateFrag = `
         texture2D(texture, coord + dx).r +
         texture2D(texture, coord + dy).r
       ) * 0.25;
-
       /* change the velocity to move toward the average */
       info.g += (average - info.r) * 2.0;
-
       /* attenuate the velocity a little so waves do not last forever */
       info.g *= 0.995;
-
       /* move the vertex along the velocity */
       info.r += info.g;
-
       /* update the normal */
       vec3 ddx = vec3(delta.x, texture2D(texture, vec2(coord.x + delta.x, coord.y)).r - info.r, 0.0);
       vec3 ddy = vec3(0.0, texture2D(texture, vec2(coord.x, coord.y + delta.y)).r - info.r, delta.y);
       info.ba = normalize(cross(ddy, ddx)).xz;
-
       gl_FragColor = info;
     }
 `;
-
 const simDropFrag = `
     precision highp float;
     precision highp int;
-
     const float PI = 3.141592653589793;
     uniform sampler2D texture;
     uniform vec2 center;
     uniform float radius;
     uniform float strength;
     varying vec2 coord;
-
     void main() {
       /* Get vertex info */
       vec4 info = texture2D(texture, coord);
-
       /* Add the drop to the height */
       float drop = max(0.0, 1.0 - length(center * 0.5 + 0.5 - coord) / radius);
       drop = 0.5 - cos(drop * PI) * 0.5;
       info.r += drop * strength;
-
       gl_FragColor = info;
     }
 `;
-
 const simVert = `
     attribute vec3 position;
     varying vec2 coord;

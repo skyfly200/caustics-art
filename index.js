@@ -453,21 +453,14 @@ class WaterSimulation {
     // Swap textures
     const _oldTarget = this.target;
     const _newTarget = this.target === this._targetA ? this._targetB : this._targetA;
-
     const oldTarget = renderer.getRenderTarget();
-
     renderer.setRenderTarget(_newTarget);
-
     mesh.material.uniforms['texture'].value = _oldTarget.texture;
-
     // TODO Camera is useless here, what should be done?
     renderer.render(mesh, this._camera);
-
     renderer.setRenderTarget(oldTarget);
-
     this.target = _newTarget;
   }
-
 }
 
 class Water {

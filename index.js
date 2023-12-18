@@ -908,25 +908,13 @@ const loaded = [
 
 Promise.all(loaded).then(() => {
   const envGeometries = [floorGeometry];
-
   environmentMap.setGeometries(envGeometries);
   environment.setGeometries(envGeometries);
-
   environment.addTo(scene);
   scene.add(water.mesh);
-
   caustics.setDeltaEnvTexture(1. / environmentMap.size);
-
   canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
-
-  // Random starting drops
-  for (var i = 0; i < randomStart ? startDrops : 0; i++) {
-    waterSimulation.addDrop(
-        renderer,
-        Math.random() * 2 - 1, Math.random() * 2 - 1,
-        0.05, (i & 1) ? 0.05 : -0.05
-    );
-  }
-
+  for (var i = 0; i < randomStart ? startDrops : 0; i++)
+    waterSimulation.addDrop(renderer, Math.random() * 2 - 1, Math.random() * 2 - 1, 0.05, (i & 1) ? 0.05 : -0.05 );
   animate();
 });

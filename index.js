@@ -341,13 +341,10 @@ const simVert = `
     }
 `;
 
-// setup for the script
 const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.domElement);
-
 const canvas = document.getElementById('canvas');
-
 const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
@@ -356,6 +353,16 @@ let soundReactive = true;
 let mouseReactive = false;
 let focusWater = false;
 let randPos = true;
+let randomStart = true;
+let startDrops = 33;
+let raindrops = false;
+let intensity = 0.033;
+let wind = false;
+let windIntensity = 0.01;
+let geometryType = "polygon";
+let polygonSides = 34;
+
+// Audio Reactivity Settings
 // TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 32768,
@@ -371,17 +378,6 @@ let audioReactivityRules = {
     { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
   ]
 };
-    // { band: 6, size: 0.04, amp: 0.11, threshold: 150 },
-    // { band: 8, size: 0.03, amp: 0.12, threshold: 140 },
-    // { band: 15, size: 0.025, amp: 0.15, threshold: 130 },
-let randomStart = true;
-let startDrops = 33;
-let raindrops = false;
-let intensity = 0.033;
-let wind = false;
-let windIntensity = 0.01;
-let geometryType = "polygon";
-let polygonSides = 34;
 
 // state vars for simulating water effects
 let gusting = false;
@@ -391,17 +387,14 @@ let gustPosition;
 let gustSize;
 let gustMass;
 
-// Colors
+// Constants
 const black = new THREE.Color('black');
 const white = new THREE.Color('white');
-
-// Constants
 const waterPosition = new THREE.Vector3(0, 0, 4);
 const surfacePosition = new THREE.Vector3(0, 0, 0);
 const near = 0;
 const far = 4;
 const waterSize = 1024;
-
 
 // Create Renderer
 const scene = new THREE.Scene();
@@ -411,8 +404,6 @@ camera.up.set(1, 0, 1);
 scene.add(camera);
 
 // Create directional light
-// TODO Replace this by a THREE.DirectionalLight and use the provided matrix (check that it's an Orthographic matrix as expected)
-// TODO: add RGB Lighting with modulatable offsets
 const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far);
 lightCamera.position.set(0., 0., far);
 lightCamera.lookAt(0, 0, 0);
@@ -430,12 +421,13 @@ renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
 // Create mouse Controls
 const controls = new THREE.OrbitControls(camera, canvas);
-
-controls.target = focusWater ? waterPosition : surfacePosition;
-controls.minPolarAngle = 0;
-controls.maxPolarAngle = Math.PI / 2. - 0.1;
-controls.minDistance = 0.1;
-controls.maxDistance = 7;
+Object.assign(controls, {
+    target: focusWater ? waterPosition : surfacePosition,
+    minPolarAngle: 0,
+    maxPolarAngle: Math.PI / 2 - 0.1,
+    minDistance: 0.1,
+    maxDistance: 7
+});
 
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();

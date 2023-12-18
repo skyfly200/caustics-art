@@ -262,8 +262,8 @@ const stats = new Stats();
 stats.showPanel(0);
 document.body.appendChild(stats.domElement);
 const canvas = document.getElementById('canvas');
-const width = canvas.width * 0.66;
-const height = canvas.height * 0.66;
+const width = canvas.width*0.66;
+const height = canvas.height*0.66;
 
 // Art Controls and Config
 let soundReactive = false;

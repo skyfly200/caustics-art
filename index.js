@@ -266,21 +266,20 @@ const width = canvas.width * 0.66;
 const height = canvas.height * 0.66;
 
 // Art Controls and Config
-let soundReactive = true;
+let soundReactive = false;
 let mouseReactive = false;
 let focusWater = false;
 let randPos = true;
 let randomStart = true;
 let startDrops = 33;
-let raindrops = false;
+let raindrops = true;
 let intensity = 0.033;
 let wind = false;
 let windIntensity = 0.01;
 let geometryType = "polygon";
-let polygonSides = 34;
+let polygonSides = 3;
 
 // Audio Reactivity Settings
-// TODO: preset band responders for resonant mode and custom resonators
 let audioReactivityRules = {
   bandCount: 32768,
   globalThreshold: 111,
@@ -788,11 +787,9 @@ function animate() {
 function onMouseMove(event) {
   if (mouseReactive) {
     const rect = canvas.getBoundingClientRect();
-    mouse.x = (event.clientX - rect.left) * 2 / width - 1;
-    mouse.y = - (event.clientY - rect.top) * 2 / height + 1;
+    mouse = { x: (event.clientX-rect.left)*2/width-1, y: -(event.clientY-rect.top)*2/height+1 }
     raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObject(targetmesh);
-    for (let intersect of intersects)
+    for (let intersect of raycaster.intersectObject(targetmesh))
       waterSimulation.addDrop(renderer, intersect.point.x, intersect.point.y, 0.03, 0.02);
   }
 }

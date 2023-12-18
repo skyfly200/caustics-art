@@ -276,8 +276,8 @@ let raindrops = true;
 let intensity = 0.033;
 let wind = false;
 let windIntensity = 0.01;
-let geometryType = "polygon";
-let polygonSides = 3;
+let geometryType = "plane";
+let polygonSides = 4;
 
 // Audio Reactivity Settings
 let audioReactivityRules = {
@@ -315,7 +315,7 @@ const waterSize = 1024;
 // Create Renderer
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-camera.position.set(0, 0, 2.25);
+camera.position.set(0, 0, 2); // set to 5.5 to view water
 camera.up.set(1, 0, 1);
 scene.add(camera);
 
@@ -350,17 +350,15 @@ const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioContext.createAnalyser();
 // Set the FFT size (the number of bins in the frequency domain)
 analyser.fftSize = audioReactivityRules.bandCount;
-
 let frequencyData;
 let micLoaded;
 
 try {
   // Get the microphone stream
-  micLoaded = navigator.mediaDevices.getUserMedia({ audio: true, video: false }).then( (value) => {
+  micLoaded = navigator.mediaDevices.getUserMedia({audio: true}).then( (value) => {
     // Connect the microphone stream to the analyser node
     const microphone = audioContext.createMediaStreamSource(value);
     microphone.connect(analyser);
-
     // Get the frequency data from the analyser
     frequencyData = new Uint8Array(analyser.frequencyBinCount);
   });
@@ -403,7 +401,7 @@ class WaterSimulation {
     this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 2000);
 
     if (geometryType == "plane")
-      this._geometry = new THREE.PlaneBufferGeometry(2, 2);
+      this._geometry = new THREE.PlaneBufferGeometry(1.8, 1.8);
     else if (geometryType == "polygon")
       this._geometry = new THREE.CircleGeometry(0.9, polygonSides);
 

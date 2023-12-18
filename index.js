@@ -893,16 +893,14 @@ function onMouseMove(event) {
   }
 }
 
-const loaded = [
-  waterSimulation.loaded,
-  water.loaded,
-  environmentMap.loaded,
-  environment.loaded,
-  caustics.loaded,
-  micLoaded,
-];
-
-Promise.all(loaded).then(() => {
+Promise.all([
+    waterSimulation.loaded,
+    water.loaded,
+    environmentMap.loaded,
+    environment.loaded,
+    caustics.loaded,
+    micLoaded
+  ]).then(() => {
   const envGeometries = [floorGeometry];
   environmentMap.setGeometries(envGeometries);
   environment.setGeometries(envGeometries);

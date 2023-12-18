@@ -369,7 +369,6 @@ try {
 } finally {}
 
 document.onkeyup = function(e) {
-    console.log(e.key);
     switch(e.key) {
       case 'm': soundReactive = !soundReactive; break;
       case 'r': raindrops = !raindrops; break;

@@ -282,7 +282,7 @@ const height = canvas.height*0.66;
 let soundReactive = false
 let mouseReactive = false
 let focusWater = false
-let raindrops = true
+let raindrops = false
 let intensity = 0.033
 let randPos = true
 let wind = false
@@ -326,7 +326,7 @@ const waterSize = 1024
 
 // Create Renderer
 const scene = new THREE.Scene()
-const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100)
+const camera = new THREE.PerspectiveCamera(53, width/height, 0.01, 100)
 camera.position.set(0, 0, 2) // set to 5.5 to view water
 camera.up.set(1, 0, 1)
 scene.add(camera)

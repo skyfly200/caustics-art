@@ -258,20 +258,33 @@ const simVert = `
     }
 `;
 
-const stats = new Stats();
-stats.showPanel(0);
-document.body.appendChild(stats.domElement);
+// Seedable Randomness Source
+class LCG {
+    constructor(seed) { this.s = seed; }
+    next() { return this.s = (1664525 * this.s + 1013904223) % 2**32 / 2**32 }
+}
+
+// Usage
+const rng = new LCG(12345)
+console.log(rng.next())
+
+// TODO: remove this after final test for performance as its using an external dependency
+const stats = new Stats()
+stats.showPanel(0)
+document.body.appendChild(stats.domElement)
+
 const canvas = document.getElementById('canvas');
 const width = canvas.width*0.66;
 const height = canvas.height*0.66;
 
+// TODO: use deterministic random for this so its consistent
 // Art Controls and Config
 let soundReactive = false;
 let mouseReactive = false;
 let focusWater = false;
 let randPos = true;
 let randomStart = true;
-let startDrops = 33;
+let startDrops = 22;
 let raindrops = true;
 let intensity = 0.033;
 let wind = false;
@@ -313,21 +326,21 @@ const far = 4;
 const waterSize = 1024;
 
 // Create Renderer
-const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100);
-camera.position.set(0, 0, 2); // set to 5.5 to view water
-camera.up.set(1, 0, 1);
-scene.add(camera);
+const scene = new THREE.Scene()
+const camera = new THREE.PerspectiveCamera(55, width / height, 0.01, 100)
+camera.position.set(0, 0, 2) // set to 5.5 to view water
+camera.up.set(1, 0, 1)
+scene.add(camera)
 
 // Create directional light
-const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far);
-lightCamera.position.set(0., 0., far);
-lightCamera.lookAt(0, 0, 0);
+const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far)
+lightCamera.position.set(0, 0, far)
+lightCamera.lookAt(0, 0, 0)
 
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(0, 0, -1);
 scene.add(light);
-light.target.position.set(0, 0, 0);
+light.target.position.set(0, 0, -0.5);
 scene.add(light.target);
 
 const renderer = new THREE.WebGLRenderer({canvas: canvas, antialias: true, alpha: true});
@@ -782,7 +795,7 @@ Promise.all([
   scene.add(water.mesh);
   caustics.setDeltaEnvTexture(1. / environmentMap.size);
   canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
-  for (var i = 0; i < randomStart ? startDrops : 0; i++)
+  for (var i = 0; i < (randomStart ? startDrops : 0); i++)
     waterSimulation.addDrop(renderer, Math.random()*2-1, Math.random()*2-1, 0.05, 0.05*(i&1||-1));
   animate();
 });

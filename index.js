@@ -264,8 +264,12 @@ class LCG {
     next() { return this.s = (1664525 * this.s + 1013904223) % 2**32 / 2**32 }
 }
 
-// Usage
-const rng = new LCG(12345)
+// Seed the rng with the hash
+const rng = new LCG(0123456789)// use tokenData.hash as seed
+console.log(rng.next())
+console.log(rng.next())
+console.log(rng.next())
+console.log(rng.next())
 console.log(rng.next())
 
 // TODO: remove this after final test for performance as its using an external dependency
@@ -273,9 +277,9 @@ const stats = new Stats()
 stats.showPanel(0)
 document.body.appendChild(stats.domElement)
 
-const canvas = document.getElementById('canvas');
-const width = canvas.width*0.66;
-const height = canvas.height*0.66;
+const canvas = document.getElementById('canvas')
+const width = canvas.width*0.66
+const height = canvas.height*0.66
 
 // TODO: use deterministic random for this so its consistent
 // Art Controls and Config
@@ -292,6 +296,7 @@ let startDrops = 22 // ~ Trait
 let geometryType = "polygon" // ~ Trait
 let polygonSides = 6 // ~ Trait
 let scale = 1 // ~ Trait
+let deltaRates = [512, 512]
 
 // Audio Reactivity Settings
 let audioReactivityRules = {
@@ -356,6 +361,7 @@ renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 //     maxDistance: 7
 // });
 
+// TODO: only init this when the audio mode gets activated
 // Get audio context and create an analyser node
 const audioContext = new (window.AudioContext || window.webkitAudioContext)();
 const analyser = audioContext.createAnalyser();
@@ -432,7 +438,7 @@ class WaterSimulation {
 
     const updateMaterial = new THREE.RawShaderMaterial({
       uniforms: {
-        delta: { value: [1 / 216, 1 / 216] },  // TODO: Remove this useless uniform and hardcode it in shaders?
+        delta: { value: [1 / deltaRates[0], 1 / deltaRates[1]] },
         texture: { value: null },
       },
       vertexShader: simVert,

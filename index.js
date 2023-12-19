@@ -279,18 +279,19 @@ const height = canvas.height*0.66;
 
 // TODO: use deterministic random for this so its consistent
 // Art Controls and Config
-let soundReactive = false;
-let mouseReactive = false;
-let focusWater = false;
-let randPos = true;
-let randomStart = true;
-let startDrops = 22;
-let raindrops = true;
-let intensity = 0.033;
-let wind = false;
-let windIntensity = 0.01;
-let geometryType = "polygon";
-let polygonSides = 6;
+let soundReactive = false
+let mouseReactive = false
+let focusWater = false
+let raindrops = true
+let intensity = 0.033
+let randPos = true
+let wind = false
+let windIntensity = 0.01
+let randomStart = true // Default token render state
+let startDrops = 22 // ~ Trait
+let geometryType = "polygon" // ~ Trait
+let polygonSides = 6 // ~ Trait
+let scale = 1 // ~ Trait
 
 // Audio Reactivity Settings
 let audioReactivityRules = {
@@ -306,24 +307,22 @@ let audioReactivityRules = {
     { startBand: 10, endBand: 20, size: 0.01, amp: 0.05, threshold: 180 },
     { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
   ]
-};
+}
 
 // state vars for simulating water effects
-let gusting = false;
-let gustLength = 0;
-let gustStart = 0;
-let gustPosition;
-let gustSize;
-let gustMass;
+let gusting = false
+let gustLength = 0
+let gustStart = 0
+let gustPosition,gustSize,gustMass
 
 // Constants
-const black = new THREE.Color('black');
-const white = new THREE.Color('white');
-const waterPosition = new THREE.Vector3(0, 0, 4);
-const surfacePosition = new THREE.Vector3(0, 0, 0);
-const near = 0;
-const far = 4;
-const waterSize = 1024;
+const black = new THREE.Color('black')
+const white = new THREE.Color('white')
+const waterPosition = new THREE.Vector3(0, 0, 4)
+const surfacePosition = new THREE.Vector3(0, 0, 0)
+const near = 0
+const far = 4
+const waterSize = 1024
 
 // Create Renderer
 const scene = new THREE.Scene()
@@ -336,7 +335,7 @@ scene.add(camera)
 const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far)
 lightCamera.position.set(0, 0, far)
 
-const light = new THREE.DirectionalLight(0xffffff, 1);
+const light = new THREE.DirectionalLight(0xfff, 1);
 light.position.set(0, 0, -1);
 scene.add(light);
 light.target.position.set(0, 0, -0.5);

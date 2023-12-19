@@ -335,7 +335,6 @@ scene.add(camera)
 // Create directional light
 const lightCamera = new THREE.OrthographicCamera(-1.2, 1.2, 1.2, -1.2, near, far)
 lightCamera.position.set(0, 0, far)
-lightCamera.lookAt(0, 0, 0)
 
 const light = new THREE.DirectionalLight(0xffffff, 1);
 light.position.set(0, 0, -1);

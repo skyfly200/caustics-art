@@ -336,11 +336,11 @@ function genTokenData(projectNum) {
         vertexShader: simVert
       });
   
-    //   const resetMesh = new THREE.Mesh(this._geometry, resetMaterial);
-    //   const oldTarget = renderer.getRenderTarget();
-    //   renderer.setRenderTarget(this.target);
-    //   renderer.render(resetMesh, this._camera);
-    //   renderer.setRenderTarget(oldTarget);
+      const resetMesh = new THREE.Mesh(this._geometry, resetMaterial);
+      const oldTarget = renderer.getRenderTarget();
+      renderer.setRenderTarget(this.target);
+      renderer.render(resetMesh, this._camera);
+      renderer.setRenderTarget(oldTarget);
     }
   
     // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])
@@ -880,6 +880,6 @@ function genTokenData(projectNum) {
     caustics.setDeltaEnvTexture(1. / environmentMap.size);
     canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
     for (var i = 0; i < (randomStart ? startDrops : 0); i++)
-      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, 0.05*(1/scale), 0.05*(i&1||-1))*(1/scale);
+      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, 0.05, 0.05*(i&1||-1));
     animate();
   });

@@ -157,7 +157,7 @@ function genTokenData(projectNum) {
   // Audio Reactivity Settings
   let audioReactivityRules = {
     bandCount: 32768,
-    globalThreshold: 111,
+    globalThreshold: 50,
     debugResponders: true,
     responders: [
       { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
@@ -190,11 +190,14 @@ function genTokenData(projectNum) {
           // Connect the microphone stream to the analyser node
           const microphone = audioContext.createMediaStreamSource(value);
           microphone.connect(this.analyser);
+          console.log("sound loading")
           // Get the frequency data from the analyser
-          this.frequencyData = new Uint8Array(analyser.frequencyBinCount);
+          this.frequencyData = new Uint8Array(this.analyser.frequencyBinCount);
           this.audioLoaded = true;
-          console.log("sound")
+          console.log("sound loaded")
         });
+      } catch(err) {
+        console.log(err)
       } finally {}
     }
   }
@@ -798,7 +801,8 @@ function genTokenData(projectNum) {
     // Update the water
     if (clock.getElapsedTime() > 0.032) {
       if (soundReactive && audio.audioLoaded) {
-        audio.analyser.getByteFrequencyData(audio.frequencyData);
+        let fd = audio.frequencyData
+        audio.analyser.getByteFrequencyData(fd);
         const responders = audioReactivityRules.responders;
         for (const r in responders) {
           let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
@@ -807,12 +811,12 @@ function genTokenData(projectNum) {
   
           if (responders[r].startBand === responders[r].endBand) {
             // Single band responder
-            if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, frequencyData[responders[r].startBand], frequencyData[responders[r].startBand] > threshold, threshold);
-            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
+            if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, fd[responders[r].startBand], fd[responders[r].startBand] > threshold, threshold);
+            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
           } else {
             // Range of bands responder
             let totalAmp = 0;
-            for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += frequencyData[i];
+            for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += fd[i];
             let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
             if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
           waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));

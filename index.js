@@ -102,7 +102,7 @@ function genTokenData(projectNum) {
   let wind = false
   let windIntensity = 0.01
   let randomStart = true // Default token render state
-  let geometryType = rng.random_dec() < 0.05 ? "polygon" : "plane" // ~ Trait
+  let geometryType = rng.random_dec() < 0.05 ? "plane" : "polygon" // ~ Trait
   let polygonSides = rng.random_int(3,34) // ~ Trait
   let scale = rng.random_int(1,10) // ~ Trait
   let startDrops = rng.random_int(3,55) + scale // ~ Trait

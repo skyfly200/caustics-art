@@ -102,12 +102,12 @@ function genTokenData(projectNum) {
   let wind = false
   let windIntensity = 0.01
   let randomStart = true // Default token render state
-  let geometryType = rng.random_dec() < 0.5 ? "polygon" : "plane" // ~ Trait
+  let geometryType = rng.random_dec() < 0.05 ? "polygon" : "plane" // ~ Trait
   let polygonSides = rng.random_int(3,34) // ~ Trait
   let scale = rng.random_int(1,10) // ~ Trait
   let startDrops = rng.random_int(3,55) + scale // ~ Trait
   let dAmt = rng.skewedRandom(1000)
-  let dilation = rng.random_dec() < 0.999 ? (rng.random_dec() < 0.5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
+  let dilation = rng.random_dec() < 0.1 ? (rng.random_dec() < 0.5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
   let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
   let attenuate = 1.0 - (0.0015 * scale) - 0.0035
   

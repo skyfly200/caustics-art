@@ -154,16 +154,6 @@ function genTokenData(projectNum) {
   renderer.autoClear = false;
   renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
   
-  // Create mouse Controls
-  // const controls = new THREE.OrbitControls(camera, canvas);
-  // Object.assign(controls, {
-  //     target: focusWater ? waterPosition : surfacePosition,
-  //     minPolarAngle: 0,
-  //     maxPolarAngle: Math.PI / 2 - 0.1,
-  //     minDistance: 0.1,
-  //     maxDistance: 7
-  // });
-  
   // Audio Reactivity Settings
   let audioReactivityRules = {
     bandCount: 32768,

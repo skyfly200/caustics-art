@@ -96,23 +96,24 @@ function genTokenData(projectNum) {
   let mouseReactive = true
   let showWater = true
   let focusWater = false
-  let raindrops = false
+  let raindrops = true
   let intensity = 0.033
   let randPos = true
   let wind = false
   let windIntensity = 0.01
   let randomStart = true // Default token render state
-  let geometryType = rng.random_dec() < 0.05 ? "plane" : "polygon" // ~ Trait
   let polygonSides = rng.random_int(3,34) // ~ Trait
   let scale = rng.random_int(1,10) // ~ Trait
-  let startDrops = rng.random_int(3,55) + scale // ~ Trait
+  let startDrops = rng.random_int(10,55) + scale // ~ Trait
   let dAmt = rng.skewedRandom(1000)
   let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
   let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
   let attenuate = 1.0 - (0.0015 * scale) - 0.0035
   
-  console.log(": ", )
-  console.log(": ", )
+  console.log("Sides: ", polygonSides)
+  console.log("Scale: ", scale)
+  console.log("Drops: ", startDrops)
+  console.log("Time: ", dilation)
   
   //TODO: use scale in droplets
   
@@ -303,12 +304,7 @@ function genTokenData(projectNum) {
   
     constructor() {
       this._camera = new THREE.OrthographicCamera(0, 1, 1, 0, 0, 2000);
-  
-      if (geometryType == "plane")
-        this._geometry = new THREE.PlaneBufferGeometry(1.8, 1.8);
-      else if (geometryType == "polygon")
-        this._geometry = new THREE.CircleGeometry(0.9, polygonSides);
-  
+      this._geometry = new THREE.CircleGeometry(0.9, polygonSides);
       this._targetA = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
       this._targetB = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
       this.target = this._targetA;
@@ -757,12 +753,12 @@ function genTokenData(projectNum) {
     // Rain
     if (raindrops) {
       if (Math.random() <= intensity) {
-        let size = Math.random() * 0.05;
-        let mass = Math.random() * 0.05;
-        mass = (Math.random() > 0.5) ? mass : mass * -1
-        let posX = randPos ? Math.random() * 2 - 1 : 0;
-        let posY = randPos ? Math.random() * 2 - 1 : 0;
-        waterSimulation.addDrop( renderer, posX, posY, size, mass );
+        let size = rng.random_dec() * 0.05;
+        let mass = rng.random_dec() * 0.05;
+        mass = (rng.random_dec() > 0.5) ? mass : mass * -1
+        let posX = randPos ? rng.random_dec() * 2 - 1 : 0;
+        let posY = randPos ? rng.random_dec() * 2 - 1 : 0;
+        waterSimulation.addDrop(renderer, posX, posY, size, mass);
       }
     }
     // Wind

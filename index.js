@@ -68,7 +68,7 @@ function genTokenData(projectNum) {
       return Math.floor(this.random_num(a, b + 1));
     }
     skewedRandom(a) {
-        var power = 3; // Increase power to skew more towards smaller numbers
+        var power = 5; // Increase power to skew more towards smaller numbers
         return Math.ceil(Math.pow(this.random_dec(), power) * a);
     }
   }
@@ -107,7 +107,7 @@ function genTokenData(projectNum) {
   let scale = rng.random_int(1,10) // ~ Trait
   let startDrops = rng.random_int(3,55) + scale // ~ Trait
   let dAmt = rng.skewedRandom(1000)
-  let dilation = rng.random_dec() < 0.1 ? (rng.random_dec() < 0.5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
+  let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
   let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
   let attenuate = 1.0 - (0.0015 * scale) - 0.0035
   

@@ -11,7 +11,7 @@ function genTokenData(projectNum) {
     data.tokenId = ( projectNum * 1000000 + Math.floor(Math.random()*1000) ).toString();
     return data;
   }
-  let tokenData = genTokenData(123);
+  let tokenData = genTokenData(1111);
   
   // Static Hash and ID
   // tokenData = {
@@ -98,10 +98,10 @@ function genTokenData(projectNum) {
   let wind = false
   let windIntensity = 0.01
   let randomStart = true // Default token render state
-  let startDrops = rng.random_int(3,55) // ~ Trait
   let geometryType = "polygon" // ~ Trait
-  let polygonSides = rng.random_int(3,24) // ~ Trait
+  let polygonSides = rng.random_int(1,36) // ~ Trait
   let scale = rng.random_int(1,10) // ~ Trait
+  let startDrops = rng.random_int(3,55) // ~ Trait
   let deltaRates = [1/(216*scale), 1/(216*scale)]
   let attenuate = 1.0 - (0.0015 * scale) - 0.0035
   
@@ -196,9 +196,7 @@ function genTokenData(projectNum) {
           this.audioLoaded = true;
           console.log("sound loaded")
         });
-      } catch(err) {
-        console.log(err)
-      } finally {}
+      } catch(err) {console.log(err)} finally {}
     }
   }
   
@@ -880,6 +878,6 @@ function genTokenData(projectNum) {
     caustics.setDeltaEnvTexture(1. / environmentMap.size);
     canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
     for (var i = 0; i < (randomStart ? startDrops : 0); i++)
-      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, 0.05, 0.05*(i&1||-1));
+      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.05*(i&1||-1));
     animate();
   });

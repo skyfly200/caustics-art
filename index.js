@@ -67,6 +67,10 @@ function genTokenData(projectNum) {
     random_int(a, b) {
       return Math.floor(this.random_num(a, b + 1));
     }
+    skewedRandom(a) {
+        var power = 3; // Increase power to skew more towards smaller numbers
+        return Math.ceil(Math.pow(this.random_dec(), power) * a);
+    }
   }
   
   // Create a Random object for prng
@@ -75,7 +79,7 @@ function genTokenData(projectNum) {
   /* DEV BEGIN */
   // TODO: remove this after final testing for performance as its using an external dependency
   const stats = new Stats()
-  stats.showPanel(2)
+  stats.showPanel(0)
   document.body.appendChild(stats.domElement)
   /* DEV END */
   
@@ -99,10 +103,12 @@ function genTokenData(projectNum) {
   let windIntensity = 0.01
   let randomStart = true // Default token render state
   let geometryType = "polygon" // ~ Trait
-  let polygonSides = rng.random_int(1,36) // ~ Trait
+  let polygonSides = rng.random_int(3,34) // ~ Trait
   let scale = rng.random_int(1,10) // ~ Trait
-  let startDrops = rng.random_int(3,55) // ~ Trait
-  let deltaRates = [1/(216*scale), 1/(216*scale)]
+  let startDrops = rng.random_int(3,55) + scale // ~ Trait
+  let dAmt = rng.skewedRandom(1000)
+  let dilation = rng.random_dec() < 0.999 ? (rng.random_dec() < 0.5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
+  let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
   let attenuate = 1.0 - (0.0015 * scale) - 0.0035
   
   //TODO: use scale in droplets

@@ -206,7 +206,7 @@ function genTokenData(projectNum) {
         case 'm': if (!audio.audioLoaded) audio.startAudio(); soundReactive = !soundReactive; break;
         case 'r': raindrops = !raindrops; break;
         case 'w': wind = !wind; break;
-        case 'c': /* calm - reset the water surface */ break;
+        case 'c': waterSimulation.resetSimulation(renderer); break;
         case 'd': camera.position.set(0, 0, 6); break;
         case 'e': camera.position.set(0, 0, 2); break;
         case 'h': showWater = !showWater; break;
@@ -275,6 +275,12 @@ function genTokenData(projectNum) {
         gl_FragColor = info;
       }
   `;
+  const resetFrag = `
+      precision highp float;
+      void main() {
+        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+      }
+  `;
   const simVert = `
       attribute vec3 position;
       varying vec2 coord;
@@ -319,6 +325,19 @@ function genTokenData(projectNum) {
   
       this._dropMesh = new THREE.Mesh(this._geometry, dropMaterial);
       this._updateMesh = new THREE.Mesh(this._geometry, updateMaterial);
+    }
+    
+    resetSimulation(renderer) {
+      const resetMaterial = new THREE.RawShaderMaterial({
+        fragmentShader: resetFrag,
+        vertexShader: simVert
+      });
+  
+      const resetMesh = new THREE.Mesh(this._geometry, resetMaterial);
+      const oldTarget = renderer.getRenderTarget();
+      renderer.setRenderTarget(this.target);
+      renderer.render(resetMesh, this._camera);
+      renderer.setRenderTarget(oldTarget);
     }
   
     // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])
@@ -728,8 +747,8 @@ function genTokenData(projectNum) {
     // Rain
     if (raindrops) {
       if (Math.random() <= intensity) {
-        let size = Math.random() * 0.1;
-        let mass = Math.random() * 0.1;
+        let size = Math.random() * 0.05 * scale;
+        let mass = Math.random() * 0.05 * scale;
         mass = (Math.random() > 0.5) ? mass : mass * -1
         let posX = randPos ? Math.random() * 2 - 1 : 0;
         let posY = randPos ? Math.random() * 2 - 1 : 0;
@@ -857,6 +876,6 @@ function genTokenData(projectNum) {
     caustics.setDeltaEnvTexture(1. / environmentMap.size);
     canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
     for (var i = 0; i < (randomStart ? startDrops : 0); i++)
-      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, 0.05, 0.05*(i&1||-1));
+      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, 0.05*scale, 0.05*(i&1||-1))*scale;
     animate();
   });

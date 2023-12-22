@@ -348,8 +348,8 @@ function genTokenData(projectNum) {
       const { uniforms } = this._dropMesh.material;
       Object.assign(uniforms, {
         'center': { value: [x, y] },
-        'radius': { value: radius },
-        'strength': { value: strength }
+        'radius': { value: radius*(1/scale) },
+        'strength': { value: strength*(1/scale) }
       });
       this._render(renderer, this._dropMesh);
     }
@@ -750,8 +750,8 @@ function genTokenData(projectNum) {
     // Rain
     if (raindrops) {
       if (Math.random() <= intensity) {
-        let size = Math.random() * 0.05 * scale;
-        let mass = Math.random() * 0.05 * scale;
+        let size = Math.random() * 0.05;
+        let mass = Math.random() * 0.05;
         mass = (Math.random() > 0.5) ? mass : mass * -1
         let posX = randPos ? Math.random() * 2 - 1 : 0;
         let posY = randPos ? Math.random() * 2 - 1 : 0;

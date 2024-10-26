@@ -11,7 +11,7 @@ function genTokenData(projectNum) {
     data.tokenId = ( projectNum * 1000000 + Math.floor(Math.random()*1000) ).toString();
     return data;
   }
-  tokenData = genTokenData(1111);
+  tokenData = genTokenData(11111);
   
   // Static Hash and ID
   // tokenData = {
@@ -90,6 +90,7 @@ function genTokenData(projectNum) {
   const width = canvas.width
   const height = canvas.height
   
+  // TODO: create non linear mappings of random traits
   // Art Controls and Config
   let simRes = 2**13
   let soundReactive = false
@@ -97,7 +98,7 @@ function genTokenData(projectNum) {
   let showWater = true
   let focusWater = false
   let raindrops = true
-  let intensity = 0.033
+  let intensity = 0.1 // TODO : varry intesity in a range
   let randPos = true
   let wind = false
   let windIntensity = 0.01
@@ -498,7 +499,7 @@ function genTokenData(projectNum) {
   
   const causticFrag = `
       // TODO Make it a uniform
-      const float causticsFactor = 0.15;
+      const float causticsFactor = 0.5;
       varying vec3 oldPosition;
       varying vec3 newPosition;
       varying float waterDepth;
@@ -620,13 +621,10 @@ function genTokenData(projectNum) {
   
     render(renderer) {
       const oldTarget = renderer.getRenderTarget();
-  
       renderer.setRenderTarget(this.target);
       renderer.setClearColor(black, 0);
       renderer.clear();
-  
       renderer.render(this._waterMesh, lightCamera);
-  
       renderer.setRenderTarget(oldTarget);
     }
   
@@ -865,6 +863,7 @@ function genTokenData(projectNum) {
       caustics.loaded,
       audio.micLoaded
     ]).then(() => {
+    // TODO: create a 3d plane relief to project caustic patterns on using normal maps
     const envGeometries = [new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
     environmentMap.setGeometries(envGeometries);
     environment.setGeometries(envGeometries);

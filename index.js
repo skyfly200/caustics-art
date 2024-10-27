@@ -96,7 +96,9 @@ function genTokenData(projectNum) {
   let showWater = true
   let focusWater = false
   let raindrops = true
-  let intensity = 0.1 // TODO : varry intesity in a range
+  let intensity = 0.2
+  let intensityVariability = 0.2
+  let intensityVariationVector = 0
   let randPos = true
   let wind = false
   let windIntensity = 0.01
@@ -204,8 +206,8 @@ function genTokenData(projectNum) {
   document.onkeyup = function(e) {
       switch(e.key) {
         case 'm': if (!audio.audioLoaded) audio.startAudio(); soundReactive = !soundReactive; break;
-        case 'r': raindrops = !raindrops; break;
-        case 'w': wind = !wind; break;
+        case 'r': raindrops = !raindrops; console.log("rain"); break;
+        case 'w': wind = !wind; console.log("wind"); break;
         case 'c': waterSimulation.resetSimulation(renderer); break;
         case 'd': camera.position.set(0, 0, 6); break;
         case 'e': camera.position.set(0, 0, 2); break;
@@ -738,7 +740,12 @@ function genTokenData(projectNum) {
     stats.begin();
     // Rain
     if (raindrops) {
-      if (Math.random() <= intensity) {
+      // intensity variation random walk
+      intensityVariationVector += (rng.random_dec() - 0.5) * 0.1 * intensityVariability
+      intensityVariationVector = Math.max(-intensityVariability , Math.min(intensityVariability, intensityVariationVector))
+      console.log(intensityVariationVector)
+      let intensityTotal = intensity + intensityVariationVector
+      if (Math.random() <= intensityTotal) {
         let size = rng.random_dec() * 0.05;
         let mass = rng.random_dec() * 0.05;
         mass = (rng.random_dec() > 0.5) ? mass : mass * -1

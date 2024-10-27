@@ -206,8 +206,8 @@ function genTokenData(projectNum) {
   document.onkeyup = function(e) {
       switch(e.key) {
         case 'm': if (!audio.audioLoaded) audio.startAudio(); soundReactive = !soundReactive; break;
-        case 'r': raindrops = !raindrops; console.log("rain"); break;
-        case 'w': wind = !wind; console.log("wind"); break;
+        case 'r': raindrops = !raindrops; console.log("rain: ", raindrops); break;
+        case 'w': wind = !wind; console.log("wind: ", wind); break;
         case 'c': waterSimulation.resetSimulation(renderer); break;
         case 'd': camera.position.set(0, 0, 6); break;
         case 'e': camera.position.set(0, 0, 2); break;
@@ -481,8 +481,7 @@ function genTokenData(projectNum) {
   
     setGeometries(geometries) {
       this._meshes = [];
-      for (let geometry of geometries)
-        this._meshes.push(new THREE.Mesh(geometry, this._material));
+      for (let geometry of geometries) this._meshes.push(new THREE.Mesh(geometry, this._material));
     }
   
     render(renderer) {
@@ -702,9 +701,7 @@ function genTokenData(projectNum) {
   
     setGeometries(geometries) {
       this._meshes = [];
-      for (let geometry of geometries) {
-        this._meshes.push(new THREE.Mesh(geometry, this._material));
-      }
+      for (let geometry of geometries) this._meshes.push(new THREE.Mesh(geometry, this._material));
     }
   
     updateCaustics(causticsTexture) {
@@ -712,9 +709,7 @@ function genTokenData(projectNum) {
     }
   
     addTo(scene) {
-      for (let mesh of this._meshes) {
-        scene.add(mesh);
-      }
+      for (let mesh of this._meshes) scene.add(mesh);
     }
   
   }
@@ -735,16 +730,18 @@ function genTokenData(projectNum) {
   const environment = new Environment();
   const caustics = new Caustics();
   
+
   // Main rendering loop
+
   function animate() {
     stats.begin();
     // Rain
     if (raindrops) {
       // intensity variation random walk
       intensityVariationVector += (rng.random_dec() - 0.5) * 0.1 * intensityVariability
-      intensityVariationVector = Math.max(-intensityVariability , Math.min(intensityVariability, intensityVariationVector))
+      intensityVariationVector = Math.max(-(intensityVariability) , Math.min(intensityVariability, intensityVariationVector))
       console.log(intensityVariationVector)
-      let intensityTotal = intensity + intensityVariationVector
+      let intensityTotal = Math.max(Math.min(intensity + intensityVariationVector, 1), 0)
       if (Math.random() <= intensityTotal) {
         let size = rng.random_dec() * 0.05;
         let mass = rng.random_dec() * 0.05;

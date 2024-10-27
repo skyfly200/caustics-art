@@ -738,10 +738,10 @@ function genTokenData(projectNum) {
     // Rain
     if (raindrops) {
       // intensity variation random walk
-      intensityVariationVector += (rng.random_dec() - 0.5) * 0.1 * intensityVariability
+      intensityVariationVector += (rng.random_dec() - 0.5) * 0.033 * intensityVariability
       intensityVariationVector = Math.max(-(intensityVariability) , Math.min(intensityVariability, intensityVariationVector))
-      console.log(intensityVariationVector)
       let intensityTotal = Math.max(Math.min(intensity + intensityVariationVector, 1), 0)
+      console.log(intensityVariationVector, intensityTotal)
       if (Math.random() <= intensityTotal) {
         let size = rng.random_dec() * 0.05;
         let mass = rng.random_dec() * 0.05;

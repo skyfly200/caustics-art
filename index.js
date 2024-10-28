@@ -724,6 +724,7 @@ function genTokenData(projectNum) {
     }
   }
   
+  // Instantiate classes
   const waterSimulation = new WaterSimulation();
   const water = new Water();
   const environmentMap = new EnvironmentMap();
@@ -873,7 +874,7 @@ function genTokenData(projectNum) {
     scene.add(water.mesh);
     caustics.setDeltaEnvTexture(1. / environmentMap.size);
     canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
-    for (var i = 0; i < (randomStart ? startDrops : 0); i++)
+    for (var i=0; i<(randomStart?startDrops:0); i++)
       waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.05*(i&1||-1));
     animate();
   });

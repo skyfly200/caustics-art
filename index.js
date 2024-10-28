@@ -92,6 +92,7 @@ const width = canvas.width
 const height = canvas.height
 
 // TODO: create non linear mappings of random traits
+// TODO: create floor releifs as traits (maybe noise and pattern based normal maps?)
 // Art Controls and Config
 let simRes = 2**13
 let soundReactive = false
@@ -113,6 +114,7 @@ let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
 let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
 let attenuate = 1.0 - (0.0015 * scale) - 0.0035
+
 
 console.log("Sides: ", polygonSides)
 console.log("Scale: ", scale)

@@ -164,7 +164,7 @@ renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 let audioReactivityRules = {
   bandCount: 32768,
   globalThreshold: 50,
-  debugResponders: true,
+  debugResponders: false,
   responders: [
     { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
     { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },

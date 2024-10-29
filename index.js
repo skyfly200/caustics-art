@@ -121,8 +121,6 @@ console.log("Scale: ", scale)
 console.log("Drops: ", startDrops)
 console.log("Time: ", dilation)
 
-//TODO: use scale in droplets
-
 // state vars for simulating water effects
 let gusting = false
 let gustLength = 0

@@ -112,7 +112,8 @@ let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
 let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
-let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
+//let deltaRates = [1/(216*scale*dilation[0]), 1/(216*scale*dilation[1])]
+let deltaRates = dilation.map( d => 1/(216*scale*d))
 let attenuate = 1.0 - (0.0015 * scale) - 0.0035
 
 

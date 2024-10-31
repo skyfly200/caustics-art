@@ -158,6 +158,60 @@ renderer.setSize(width, height);
 renderer.autoClear = false;
 renderer.setPixelRatio( window.devicePixelRatio * 1.5 );
 
+// Environment
+const floorGeometry = new THREE.PlaneBufferGeometry(100, 100, 1, 1);
+
+const objLoader = new THREE.OBJLoader();
+let shark;
+const sharkLoaded = new Promise((resolve) => {
+  objLoader.load('assets/WhiteShark.obj', (sharkGeometry) => {
+    sharkGeometry = sharkGeometry.children[0].geometry;
+    sharkGeometry.computeVertexNormals();
+    sharkGeometry.scale(0.12, 0.12, 0.12);
+    sharkGeometry.rotateX(Math.PI / 2.);
+    sharkGeometry.rotateZ(-Math.PI / 2.);
+    sharkGeometry.translate(0, 0, 0.4);
+
+    shark = sharkGeometry;
+    resolve();
+  });
+});
+
+let rock1;
+let rock2;
+const rockLoaded = new Promise((resolve) => {
+  objLoader.load('assets/rock.obj', (rockGeometry) => {
+    rockGeometry = rockGeometry.children[0].geometry;
+    rockGeometry.computeVertexNormals();
+
+    rock1 = new THREE.BufferGeometry().copy(rockGeometry);
+    rock1.scale(0.05, 0.05, 0.02);
+    rock1.translate(0.2, 0., 0.1);
+
+    rock2 = new THREE.BufferGeometry().copy(rockGeometry);
+    rock2.scale(0.05, 0.05, 0.05);
+    rock2.translate(-0.5, 0.5, 0.2);
+    rock2.rotateZ(Math.PI / 2.);
+
+    resolve();
+  });
+});
+
+let plant;
+const plantLoaded = new Promise((resolve) => {
+  objLoader.load('assets/plant.obj', (plantGeometry) => {
+    plantGeometry = plantGeometry.children[0].geometry;
+    plantGeometry.computeVertexNormals();
+
+    plant = plantGeometry;
+    plant.rotateX(Math.PI / 6.);
+    plant.scale(0.03, 0.03, 0.03);
+    plant.translate(-0.5, 0.5, 0.);
+
+    resolve();
+  });
+});
+
 // Audio Reactivity Settings
 let audioReactivityRules = {
   bandCount: 32768,
@@ -850,11 +904,14 @@ Promise.all([
     environmentMap.loaded,
     environment.loaded,
     caustics.loaded,
-    audio.micLoaded
+    audio.micLoaded, 
+    plantLoaded,
+    rockLoaded,
+    sharkLoaded
   ]).then(() => {
     
     // TODO: create a 3d plane relief to project caustic patterns on using normal maps
-    const envGeometries = [new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
+    const envGeometries = [rock1, rock2, shark, plant, new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
     environmentMap.setGeometries(envGeometries);
     environment.setGeometries(envGeometries);
     environment.addTo(scene);

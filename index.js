@@ -924,8 +924,9 @@ Promise.all([
         case 'r': raindrops = !raindrops; console.log("rain: ", raindrops); break;
         case 'w': wind = !wind; console.log("wind: ", wind); break;
         case 'c': waterSimulation.resetSimulation(renderer); break;
-        case 'd': camera.position.set(0, 0, 6); break;
-        case 'e': camera.position.set(0, 0, 2); break;
+        case 'd': camera.position.set(0, 0, 6); camera.rotation.x = 0; break;
+        case 'e': camera.position.set(0, 0, 2); camera.rotation.x = 0; break;
+        case 's': camera.position.set(0, -1.25, 1.66); camera.rotation.x = 35 * Math.PI / 180; break;
         case 'h': showWater = !showWater; break;
       }
     };

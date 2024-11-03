@@ -387,6 +387,8 @@ class WaterSimulation {
     this._render(renderer, this._dropMesh);
   }
 
+  // TODO: add cymatics with standing wave stmulator
+
   stepSimulation(renderer) {
     this._render(renderer, this._updateMesh);
   }

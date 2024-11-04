@@ -95,9 +95,10 @@ const height = canvas.height
 // TODO: create floor releifs as traits (maybe noise and pattern based normal maps?)
 // Art Controls and Config
 let simRes = 2**13
-let soundReactive = false
+let soundReactive = true
 let mouseReactive = true
 let showWater = true
+let renderObjects = false
 let focusWater = false
 let raindrops = true
 let intensity = 0.2
@@ -106,7 +107,7 @@ let intensityVariationVector = 0
 let randPos = true
 let wind = false
 let windIntensity = 0.01
-let randomStart = true // Default token render state
+let randomStart = false // Default token render state
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
@@ -218,15 +219,23 @@ let audioReactivityRules = {
   globalThreshold: 50,
   debugResponders: false,
   responders: [
-    { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-    { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-    { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-    { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-    { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-    { startBand: 10, endBand: 20, size: 0.01, amp: 0.05, threshold: 180 },
-    { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+    { startBand: 1, endBand: 10, size: 9999, amp: 0.001, threshold: 240 }
   ]
 }
+// let audioReactivityRules = {
+//   bandCount: 32768,
+//   globalThreshold: 50,
+//   debugResponders: false,
+//   responders: [
+//     { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
+//     { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
+//     { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
+//     { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
+//     { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
+//     { startBand: 10, endBand: 20, size: 0.01, amp: 0.05, threshold: 180 },
+//     { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
+//   ]
+// }
 
 class Audio {
   constructor() {
@@ -848,14 +857,14 @@ function animate() {
         if (responders[r].startBand === responders[r].endBand) {
           // Single band responder
           if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, fd[responders[r].startBand], fd[responders[r].startBand] > threshold, threshold);
-          waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
+            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
         } else {
           // Range of bands responder
           let totalAmp = 0;
           for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += fd[i];
           let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
           if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
-        waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
+            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
         }
       } 
     }
@@ -906,14 +915,14 @@ Promise.all([
     environmentMap.loaded,
     environment.loaded,
     caustics.loaded,
-    audio.micLoaded, 
+    audio.micLoaded,
     plantLoaded,
     rockLoaded,
     sharkLoaded
   ]).then(() => {
     
     // TODO: create a 3d plane relief to project caustic patterns on using normal maps
-    const envGeometries = [rock1, rock2, shark, plant, new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
+    const envGeometries = renderObjects ? [rock1, rock2, shark, plant, new THREE.PlaneBufferGeometry(100, 100, 1, 1)] : [new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
     environmentMap.setGeometries(envGeometries);
     environment.setGeometries(envGeometries);
     environment.addTo(scene);
@@ -932,7 +941,10 @@ Promise.all([
         case 'h': showWater = !showWater; break;
       }
     };
-    for (var i=0; i<(randomStart?startDrops:0); i++)
-      waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.05*(i&1||-1));
+    if(randomStart) {
+      for (var i=0; i<startDrops; i++) {
+        waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.05*(i&1||-1));
+      }
+    }
     animate();
 });

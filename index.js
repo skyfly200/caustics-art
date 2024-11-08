@@ -498,13 +498,6 @@ class Water {
 
 // This renders the environment map seen from the light POV.
 // The resulting texture contains (posx, posy, posz, depth) in the colors channels.
-const mapFrag = `
-    varying vec4 worldPosition;
-    varying float depth;
-    void main() {
-      gl_FragColor = vec4(worldPosition.xyz, depth);
-    }
-`;
 const mapVert = `
     varying vec4 worldPosition;
     varying float depth;
@@ -516,6 +509,13 @@ const mapVert = `
       // Store vertex depth
       depth = projectedPosition.z;
       gl_Position = projectedPosition;
+    }
+`;
+const mapFrag = `
+    varying vec4 worldPosition;
+    varying float depth;
+    void main() {
+      gl_FragColor = vec4(worldPosition.xyz, depth);
     }
 `;
 class EnvironmentMap {

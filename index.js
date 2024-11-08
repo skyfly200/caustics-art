@@ -267,6 +267,7 @@ class Audio {
   }
 }
 
+// TODO: figure out this section
 // Ray caster
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();

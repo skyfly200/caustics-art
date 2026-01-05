@@ -275,6 +275,33 @@ const targetgeometry = new THREE.PlaneGeometry(2, 2);
 for (let vertex of targetgeometry.vertices) vertex.z = waterPosition.z;
 const targetmesh = new THREE.Mesh(targetgeometry);
 
+const modeFrag = `
+    precision highp float;
+
+    uniform sampler2D texture;
+    uniform float radius;
+    uniform float m;
+    uniform float n;
+
+    varying vec2 vUv;
+
+    void main() {
+        vec2 p = vUv * 2.0 - 1.0;   // [-1,1] space
+        float r = length(p);
+
+        float h = texture2D(texture, vUv).r;
+
+        if (r < radius) {
+            float theta = atan(p.y, p.x);
+            float mode =
+                cos(m * theta) *
+                sin(n * 3.14159265 * r / radius);
+            h += mode;
+        }
+
+        gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
+    }
+`;
 const simUpdateFrag = `
     precision highp float;
     precision highp int;
@@ -348,6 +375,17 @@ class WaterSimulation {
     this._targetA = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this._targetB = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this.target = this._targetA;
+    const modeMaterial = new THREE.RawShaderMaterial({
+      uniforms: {
+        texture: { value: null },
+        radius: { value: 0.9 },
+        m: { value: 6.0 },
+        n: { value: 1.0 },
+      },
+      vertexShader: vertexShader,
+      fragmentShader: modeFragmentShader,
+    });
+
     const dropMaterial = new THREE.RawShaderMaterial({
       uniforms: {
         center: { value: [0, 0] },
@@ -369,6 +407,7 @@ class WaterSimulation {
       fragmentShader: simUpdateFrag,
     });
 
+    this._modeMesh = new THREE.Mesh(this._geometry, modeMaterial);
     this._dropMesh = new THREE.Mesh(this._geometry, dropMaterial);
     this._updateMesh = new THREE.Mesh(this._geometry, updateMaterial);
   }
@@ -398,6 +437,11 @@ class WaterSimulation {
   }
 
   // TODO: add cymatics with standing wave stmulator
+  addMode(renderer, m, n) {
+    this._modeMesh.material.uniforms.m.value = m;
+    this._modeMesh.material.uniforms.n.value = n;
+    this._render(renderer, this._modeMesh);
+  }
 
   stepSimulation(renderer) {
     this._render(renderer, this._updateMesh);
@@ -869,6 +913,8 @@ function animate() {
         }
       } 
     }
+
+    waterSimulation.addMode(renderer, polygonSides, 1.0);
 
     waterSimulation.stepSimulation(renderer);
     const waterTexture = waterSimulation.target.texture;

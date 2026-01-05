@@ -107,7 +107,7 @@ let intensityVariationVector = 0
 let randPos = true
 let wind = false
 let windIntensity = 0.01
-let randomStart = false // Default token render state
+let randomStart = true // Default token render state
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
@@ -949,3 +949,24 @@ Promise.all([
     }
     animate();
 });
+
+
+// TODO: 
+// - enviroment / wind and rain traits
+// - Improve wind simulation
+// - chromatic aberration?
+// - balance quality and performance (add modes for diffrent devices and auto detect?)
+// - finalize traits and rarity
+// - minimize code for the deployment
+// - test net deployment
+// - calculate gas 
+
+// - fix water shader derivatives extension issue on some intel GPUs (MacBooks) (AI generated comment - look into comapability)
+// - add a gui for parameters tweaking
+// - add a way to load custom objects
+// - add a way to load custom skyboxes
+// - add a way to load custom audio reactivity rules
+// - add a way to load custom water simulation parameters
+// - add a way to load custom wind and rain parameters
+// - add a way to save a screenshot
+// - add a way to record a video

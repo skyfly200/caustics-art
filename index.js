@@ -100,14 +100,14 @@ let mouseReactive = true
 let showWater = true
 let renderObjects = false
 let focusWater = false
-let raindrops = true
+let raindrops = false
 let intensity = 0.2
 let intensityVariability = 0.2
 let intensityVariationVector = 0
 let randPos = true
 let wind = false
 let windIntensity = 0.01
-let randomStart = true // Default token render state
+let randomStart = false // Default token render state
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
@@ -275,33 +275,6 @@ const targetgeometry = new THREE.PlaneGeometry(2, 2);
 for (let vertex of targetgeometry.vertices) vertex.z = waterPosition.z;
 const targetmesh = new THREE.Mesh(targetgeometry);
 
-const modeFrag = `
-    precision highp float;
-
-    uniform sampler2D texture;
-    uniform float radius;
-    uniform float m;
-    uniform float n;
-
-    varying vec2 vUv;
-
-    void main() {
-        vec2 p = vUv * 2.0 - 1.0;   // [-1,1] space
-        float r = length(p);
-
-        float h = texture2D(texture, vUv).r;
-
-        if (r < radius) {
-            float theta = atan(p.y, p.x);
-            float mode =
-                cos(m * theta) *
-                sin(n * 3.14159265 * r / radius);
-            h += mode;
-        }
-
-        gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
-    }
-`;
 const simUpdateFrag = `
     precision highp float;
     precision highp int;
@@ -353,6 +326,26 @@ const simDropFrag = `
       gl_FragColor = info;
     }
 `;
+const simModeFrag = `
+    precision highp float;
+    uniform sampler2D texture;
+    uniform float radius;
+    uniform float m;
+    uniform float n;
+    uniform float amplitude;
+    varying vec2 coord;
+    void main() {
+        vec2 p = coord * 2.0 - 1.0; // Convert UV to [-1, 1] range
+        float r = length(p);
+        float h = texture2D(texture, coord).r;
+        if (r < radius) {
+            float theta = atan(p.y, p.x);
+            float mode = cos(m * theta) * sin(n * 3.14159265 * r / radius);
+            h += mode * amplitude;
+        }
+        gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
+    }
+`;
 const resetFrag = `
     precision highp float;
     void main() {
@@ -375,15 +368,17 @@ class WaterSimulation {
     this._targetA = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this._targetB = new THREE.WebGLRenderTarget(waterSize, waterSize, {type: THREE.FloatType});
     this.target = this._targetA;
+
     const modeMaterial = new THREE.RawShaderMaterial({
       uniforms: {
         texture: { value: null },
         radius: { value: 0.9 },
         m: { value: 6.0 },
         n: { value: 1.0 },
+        amplitude: { value: 0.0001 },
       },
-      vertexShader: vertexShader,
-      fragmentShader: modeFragmentShader,
+      vertexShader: simVert,
+      fragmentShader: simModeFrag,
     });
 
     const dropMaterial = new THREE.RawShaderMaterial({
@@ -436,10 +431,12 @@ class WaterSimulation {
     this._render(renderer, this._dropMesh);
   }
 
-  // TODO: add cymatics with standing wave stmulator
-  addMode(renderer, m, n) {
+  // Add an eigenmode (m, n) to the water surface
+  addMode(renderer, m, n, amp) {
+    if (!this._modeMesh) return;
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
+    this._modeMesh.material.uniforms.amplitude.value = 0.0001 * amp;
     this._render(renderer, this._modeMesh);
   }
 
@@ -914,7 +911,11 @@ function animate() {
       } 
     }
 
-    waterSimulation.addMode(renderer, polygonSides, 1.0);
+    // Test new surface cymatics mode
+    if (!window._modeTested) {
+      waterSimulation.addMode(renderer, polygonSides, 3, 1.0);
+      window._modeTested = true;
+    }
 
     waterSimulation.stepSimulation(renderer);
     const waterTexture = waterSimulation.target.texture;

@@ -95,8 +95,8 @@ const height = canvas.height
 // TODO: create floor releifs as traits (maybe noise and pattern based normal maps?)
 // Art Controls and Config
 let simRes = 2**13
-let soundReactive = true
-let mouseReactive = true
+let soundReactive = false
+let mouseReactive = false
 let showWater = true
 let renderObjects = false
 let focusWater = false
@@ -114,8 +114,11 @@ let startDrops = rng.random_int(10,55) + scale // ~ Trait
 let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
 let deltaRates = dilation.map( d => 1/(216*scale*d))
-let attenuate = 1.0 - (0.0015 * scale) - 0.0035
+let attenuate = 1.0 - (0.001 * scale) //- 0.0035
+console.log("Attenuation: ", attenuate);
 
+let phase = 0;
+let omega = 2.0 * Math.PI * 0.5; // 0.5 Hz for testing (slow and visible)
 
 console.log("Sides: ", polygonSides)
 console.log("Scale: ", scale)
@@ -135,7 +138,7 @@ const waterPosition = new THREE.Vector3(0, 0, 4)
 const surfacePosition = new THREE.Vector3(0, 0, 0)
 const near = 0
 const far = 4
-const waterSize = 1024
+const waterSize = 512
 
 // Create Renderer
 const scene = new THREE.Scene()
@@ -215,7 +218,7 @@ const plantLoaded = new Promise((resolve) => {
 
 // Audio Reactivity Settings
 let audioReactivityRules = {
-  bandCount: 32768,
+  bandCount: 32,
   globalThreshold: 50,
   debugResponders: false,
   responders: [
@@ -267,8 +270,7 @@ class Audio {
   }
 }
 
-// TODO: figure out this section
-// Ray caster
+// Ray caster for mouse interaction
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 const targetgeometry = new THREE.PlaneGeometry(2, 2);
@@ -283,27 +285,38 @@ const simUpdateFrag = `
     uniform float att;
     varying vec2 coord;
     void main() {
-      /* get vertex info */
       vec4 info = texture2D(texture, coord);
-      /* calculate average neighbor height */
+
       vec2 dx = vec2(delta.x, 0.0);
       vec2 dy = vec2(0.0, delta.y);
-      float average = (
-        texture2D(texture, coord - dx).r +
-        texture2D(texture, coord - dy).r +
-        texture2D(texture, coord + dx).r +
-        texture2D(texture, coord + dy).r
-      ) * 0.25;
-      /* change the velocity to move toward the average */
-      info.g += (average - info.r) * 2.0;
-      /* attenuate the velocity a little so waves do not last forever */
-      info.g *= att;
-      /* move the vertex along the velocity */
-      info.r += info.g;
-      /* update the normal */
+
+      float h = info.r;   // current height
+      float h_prev = info.g; // previous height
+
+      float l = texture2D(texture, coord - dx).r;
+      float r = texture2D(texture, coord + dx).r;
+      float d = texture2D(texture, coord - dy).r;
+      float u = texture2D(texture, coord + dy).r;
+
+      float lap = (l + r + u + d - 4.0 * h);
+
+      float c = 0.4;      // wave speed (KEEP < 0.5)
+      float damping = att; // reuse your existing attenuation
+
+      float h_new = 2.0 * h - h_prev + (c * c) * lap;
+      h_new *= damping;
+
+      // Store:
+      // R = new height
+      // G = previous height (for next step)
+      info.r = h_new;
+      info.g = h;
+
+      // Recompute normal (same as before)
       vec3 ddx = vec3(delta.x, texture2D(texture, vec2(coord.x + delta.x, coord.y)).r - info.r, 0.0);
       vec3 ddy = vec3(0.0, texture2D(texture, vec2(coord.x, coord.y + delta.y)).r - info.r, delta.y);
       info.ba = normalize(cross(ddy, ddx)).xz;
+
       gl_FragColor = info;
     }
 `;
@@ -375,7 +388,7 @@ class WaterSimulation {
         radius: { value: 0.9 },
         m: { value: 6.0 },
         n: { value: 1.0 },
-        amplitude: { value: 0.0001 },
+        amplitude: { value: 0.00001 },
       },
       vertexShader: simVert,
       fragmentShader: simModeFrag,
@@ -436,7 +449,7 @@ class WaterSimulation {
     if (!this._modeMesh) return;
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
-    this._modeMesh.material.uniforms.amplitude.value = 0.0001 * amp;
+    this._modeMesh.material.uniforms.amplitude.value = 0.00001 * amp;
     this._render(renderer, this._modeMesh);
   }
 
@@ -886,35 +899,52 @@ function animate() {
   }
 
   // Update the water
-  if (clock.getElapsedTime() > 0.032) {
+  if (clock.getElapsedTime() > 0.0032) {
     if (soundReactive && audio.audioLoaded) {
-      let fd = audio.frequencyData
+      let fd = audio.frequencyData;
       audio.analyser.getByteFrequencyData(fd);
-      const responders = audioReactivityRules.responders;
-      for (const r in responders) {
-        let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
-        let posX = randPos ? Math.random() * 2 - 1 : 0;
-        let posY = randPos ? Math.random() * 2 - 1 : 0;
 
-        if (responders[r].startBand === responders[r].endBand) {
-          // Single band responder
-          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, fd[responders[r].startBand], fd[responders[r].startBand] > threshold, threshold);
-            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
-        } else {
-          // Range of bands responder
-          let totalAmp = 0;
-          for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += fd[i];
-          let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
-          if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
-            waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
-        }
-      } 
-    }
+      // TODO: use a logarithmic distribuition of frequency bands summed into needed bands
+      let sub = fd[0] / 255;
+      let bass = fd[1] / 255;
+      let lowMid = fd[2] / 255;
+      let mid = fd[3] / 255;
+      let highMid = fd[4] / 255;
+      let treble = fd[5] / 255;
 
-    // Test new surface cymatics mode
-    if (!window._modeTested) {
-      waterSimulation.addMode(renderer, polygonSides, 3, 1.0);
-      window._modeTested = true;
+      let gain = 0.001;
+
+      // let dt = clock.getElapsedTime();
+      // phase += dt * omega;
+      // let a = Math.sin(phase) * 0.002; // small!
+      // waterSimulation.addMode(renderer, polygonSides, 2, a);
+
+      // Add modes based on frequency bands
+      waterSimulation.addMode(renderer, polygonSides, 1, gain * sub);
+      waterSimulation.addMode(renderer, polygonSides, 2, gain * bass);
+      waterSimulation.addMode(renderer, polygonSides, 3, gain * mid);
+      waterSimulation.addMode(renderer, polygonSides, 4, gain * treble);
+
+
+      // const responders = audioReactivityRules.responders;
+      // for (const r in responders) {
+      //   let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
+      //   let posX = randPos ? Math.random() * 2 - 1 : 0;
+      //   let posY = randPos ? Math.random() * 2 - 1 : 0;
+
+      //   if (responders[r].startBand === responders[r].endBand) {
+      //     // Single band responder
+      //     if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, fd[responders[r].startBand], fd[responders[r].startBand] > threshold, threshold);
+      //       waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
+      //   } else {
+      //     // Range of bands responder
+      //     let totalAmp = 0;
+      //     for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += fd[i];
+      //     let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
+      //     if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
+      //       waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
+      //   }
+      // } 
     }
 
     waterSimulation.stepSimulation(renderer);

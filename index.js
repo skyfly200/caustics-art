@@ -114,11 +114,12 @@ let startDrops = rng.random_int(10,55) + scale // ~ Trait
 let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
 let deltaRates = dilation.map( d => 1/(216*scale*d))
-let attenuate = 1.0 - (0.001 * scale) //- 0.0035
+// Damping to prevent energy accumulation
+let attenuate = 1.0 - (0.005 * scale)
 console.log("Attenuation: ", attenuate);
 
 let phase = 0;
-let omega = 2.0 * Math.PI * 0.5; // 0.5 Hz for testing (slow and visible)
+let omega = 2.0 * Math.PI * 1.0; // 0.5 Hz for testing (slow and visible)
 
 console.log("Sides: ", polygonSides)
 console.log("Scale: ", scale)
@@ -138,7 +139,7 @@ const waterPosition = new THREE.Vector3(0, 0, 4)
 const surfacePosition = new THREE.Vector3(0, 0, 0)
 const near = 0
 const far = 4
-const waterSize = 512
+const waterSize = 1024
 
 // Create Renderer
 const scene = new THREE.Scene()
@@ -278,47 +279,36 @@ for (let vertex of targetgeometry.vertices) vertex.z = waterPosition.z;
 const targetmesh = new THREE.Mesh(targetgeometry);
 
 const simUpdateFrag = `
-    precision highp float;
-    precision highp int;
-    uniform sampler2D texture;
-    uniform vec2 delta;
-    uniform float att;
-    varying vec2 coord;
-    void main() {
+  precision highp float;
+
+  uniform sampler2D texture;
+  uniform vec2 delta;
+  uniform float damping;
+  uniform float c;
+
+  varying vec2 coord;
+
+  void main() {
       vec4 info = texture2D(texture, coord);
+
+      float h = info.r;
+      float h_prev = info.g;
 
       vec2 dx = vec2(delta.x, 0.0);
       vec2 dy = vec2(0.0, delta.y);
 
-      float h = info.r;   // current height
-      float h_prev = info.g; // previous height
+      float hL = texture2D(texture, coord - dx).r;
+      float hR = texture2D(texture, coord + dx).r;
+      float hD = texture2D(texture, coord - dy).r;
+      float hU = texture2D(texture, coord + dy).r;
 
-      float l = texture2D(texture, coord - dx).r;
-      float r = texture2D(texture, coord + dx).r;
-      float d = texture2D(texture, coord - dy).r;
-      float u = texture2D(texture, coord + dy).r;
+      float lap = (hL + hR + hD + hU - 4.0 * h);
 
-      float lap = (l + r + u + d - 4.0 * h);
-
-      float c = 0.4;      // wave speed (KEEP < 0.5)
-      float damping = att; // reuse your existing attenuation
-
-      float h_new = 2.0 * h - h_prev + (c * c) * lap;
+      float h_new = 2.0 * h - h_prev + c * lap;
       h_new *= damping;
 
-      // Store:
-      // R = new height
-      // G = previous height (for next step)
-      info.r = h_new;
-      info.g = h;
-
-      // Recompute normal (same as before)
-      vec3 ddx = vec3(delta.x, texture2D(texture, vec2(coord.x + delta.x, coord.y)).r - info.r, 0.0);
-      vec3 ddy = vec3(0.0, texture2D(texture, vec2(coord.x, coord.y + delta.y)).r - info.r, delta.y);
-      info.ba = normalize(cross(ddy, ddx)).xz;
-
-      gl_FragColor = info;
-    }
+      gl_FragColor = vec4(h_new, h, info.b, info.a);
+  }
 `;
 const simDropFrag = `
     precision highp float;
@@ -340,24 +330,35 @@ const simDropFrag = `
     }
 `;
 const simModeFrag = `
-    precision highp float;
-    uniform sampler2D texture;
-    uniform float radius;
-    uniform float m;
-    uniform float n;
-    uniform float amplitude;
-    varying vec2 coord;
-    void main() {
-        vec2 p = coord * 2.0 - 1.0; // Convert UV to [-1, 1] range
-        float r = length(p);
-        float h = texture2D(texture, coord).r;
-        if (r < radius) {
-            float theta = atan(p.y, p.x);
-            float mode = cos(m * theta) * sin(n * 3.14159265 * r / radius);
-            h += mode * amplitude;
-        }
-        gl_FragColor = vec4(h, 0.0, 0.0, 1.0);
+precision highp float;
+
+uniform sampler2D texture;
+uniform float radius;
+uniform float m;
+uniform float n;
+uniform float amplitude;
+uniform float time;
+uniform float omega;
+
+varying vec2 coord;
+
+void main() {
+    vec2 p = coord * 2.0 - 1.0;
+    float r = length(p);
+
+    vec4 info = texture2D(texture, coord);
+    float h = info.r;
+    float v = info.g;
+
+    if (r < radius) {
+        float theta = atan(p.y, p.x);
+        float mode = cos(m * theta) * sin(n * 3.14159265 * r / radius);
+        float drive = sin(time * omega);
+        v += mode * amplitude * drive;   // <-- inject velocity, not height
     }
+
+    gl_FragColor = vec4(h, v, info.b, info.a);
+}
 `;
 const resetFrag = `
     precision highp float;
@@ -388,7 +389,9 @@ class WaterSimulation {
         radius: { value: 0.9 },
         m: { value: 6.0 },
         n: { value: 1.0 },
-        amplitude: { value: 0.00001 },
+        amplitude: { value: 0.000001 },
+        time: { value: 0.0 },
+        omega: { value: 6.28 }, // 2π rad/sec initially
       },
       vertexShader: simVert,
       fragmentShader: simModeFrag,
@@ -408,7 +411,8 @@ class WaterSimulation {
     const updateMaterial = new THREE.RawShaderMaterial({
       uniforms: {
         delta: { value: deltaRates },
-        att: { value: attenuate },
+        damping: { value: 0.998 },
+        c: { value: 0.25 },
         texture: { value: null },
       },
       vertexShader: simVert,
@@ -445,11 +449,13 @@ class WaterSimulation {
   }
 
   // Add an eigenmode (m, n) to the water surface
-  addMode(renderer, m, n, amp) {
+  addMode(renderer, m, n, freq, amp) {
     if (!this._modeMesh) return;
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
-    this._modeMesh.material.uniforms.amplitude.value = 0.00001 * amp;
+    this._modeMesh.material.uniforms.time.value = performance.now() * 0.001;
+    this._modeMesh.material.uniforms.omega.value = freq * 6.28318;
+    this._modeMesh.material.uniforms.amplitude.value = 0.0000001 * amp;  // extremely small
     this._render(renderer, this._modeMesh);
   }
 
@@ -851,7 +857,7 @@ function animate() {
     //console.log(intensityVariationVector, intensityTotal)
     if (Math.random() <= intensityTotal) {
       let size = rng.random_dec() * 0.05;
-      let mass = rng.random_dec() * 0.05;
+      let mass = rng.random_dec() * 0.025;  // Reduced from 0.05
       mass = (rng.random_dec() > 0.5) ? mass : mass * -1
       let posX = randPos ? rng.random_dec() * 2 - 1 : 0;
       let posY = randPos ? rng.random_dec() * 2 - 1 : 0;
@@ -899,7 +905,7 @@ function animate() {
   }
 
   // Update the water
-  if (clock.getElapsedTime() > 0.0032) {
+  if (clock.getElapsedTime() > 0.032) {
     if (soundReactive && audio.audioLoaded) {
       let fd = audio.frequencyData;
       audio.analyser.getByteFrequencyData(fd);
@@ -912,7 +918,7 @@ function animate() {
       let highMid = fd[4] / 255;
       let treble = fd[5] / 255;
 
-      let gain = 0.001;
+      let gain = 0.000001;  // Keep low to prevent accumulation
 
       // let dt = clock.getElapsedTime();
       // phase += dt * omega;
@@ -920,10 +926,10 @@ function animate() {
       // waterSimulation.addMode(renderer, polygonSides, 2, a);
 
       // Add modes based on frequency bands
-      waterSimulation.addMode(renderer, polygonSides, 1, gain * sub);
-      waterSimulation.addMode(renderer, polygonSides, 2, gain * bass);
-      waterSimulation.addMode(renderer, polygonSides, 3, gain * mid);
-      waterSimulation.addMode(renderer, polygonSides, 4, gain * treble);
+      // waterSimulation.addMode(renderer, polygonSides, 1, gain * sub);
+      // waterSimulation.addMode(renderer, polygonSides, 2, gain * bass);
+      waterSimulation.addMode(renderer, polygonSides, 3, 440, gain * mid);
+      waterSimulation.addMode(renderer, polygonSides, 4, 10000, gain * treble);
 
 
       // const responders = audioReactivityRules.responders;
@@ -1021,7 +1027,7 @@ Promise.all([
     };
     if(randomStart) {
       for (var i=0; i<startDrops; i++) {
-        waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.05*(i&1||-1));
+        waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.025*(i&1||-1));
       }
     }
     animate();

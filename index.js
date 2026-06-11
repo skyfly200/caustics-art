@@ -116,8 +116,9 @@ let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, d
 // delta is the neighbor-sampling distance for the laplacian, in UV space.
 // At waterSize=1024, one texel is 1/1024 ~ 9.8e-4. Smaller divisor = wider
 // stencil = softer waves; larger divisor = tighter stencil = crisper detail.
-// 512 ~= 2 texels: still stable, much sharper than the old 216.
-let deltaRates = dilation.map( d => 1/(512*d))
+// 1024 = one texel (canonical finite-difference). Tightest stencil before
+// stability breaks down.
+let deltaRates = dilation.map( d => 1/(1024*d))
 // Damping scales with scale so larger scales settle faster (was previously dead code).
 let attenuate = 1.0 - (0.0005 * scale)
 console.log("Attenuation: ", attenuate);
@@ -821,8 +822,8 @@ const envFrag = `
     if (causticsDepth > lightPosition.z - bias) {
       // Percentage Close Filtering
       float causticsIntensity = 0.5 * (
-        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.5)) +
-        blur(caustics, lightPosition.xy, resolution, vec2(0.5, 0.))
+        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.25)) +
+        blur(caustics, lightPosition.xy, resolution, vec2(0.25, 0.))
       );
       computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
     }

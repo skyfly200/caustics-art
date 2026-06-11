@@ -100,14 +100,14 @@ let mouseReactive = false
 let showWater = true
 let renderObjects = false
 let focusWater = false
-let raindrops = false
+let raindrops = true
 let intensity = 0.2
 let intensityVariability = 0.2
 let intensityVariationVector = 0
 let randPos = true
 let wind = false
 let windIntensity = 0.01
-let randomStart = false // Default token render state
+let randomStart = true // Default token render state
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
@@ -470,10 +470,13 @@ class WaterSimulation {
   // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])
   addDrop(renderer, x, y, radius, strength) {
     const { uniforms } = this._dropMesh.material;
+    // Mild radius shrink at high scale keeps drops feeling smaller without crushing energy.
+    // The previous full 1/scale divide was compensating for the broken sim and is no longer needed.
+    const sizeFactor = 1 / Math.sqrt(scale);
     Object.assign(uniforms, {
       'center': { value: [x, y] },
-      'radius': { value: radius*(1/scale) },
-      'strength': { value: strength*(1/scale) }
+      'radius': { value: radius * sizeFactor },
+      'strength': { value: strength }
     });
     this._render(renderer, this._dropMesh);
   }

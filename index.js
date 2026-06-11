@@ -113,10 +113,11 @@ let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
 let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
-// delta is the neighbor-sampling distance for the laplacian. It must stay above
-// one texel (1/waterSize ~= 1e-3) or waves stop propagating. scale used to multiply
-// here, which broke the sim for scale > ~2. Keep delta tied only to dilation.
-let deltaRates = dilation.map( d => 1/(216*d))
+// delta is the neighbor-sampling distance for the laplacian, in UV space.
+// At waterSize=1024, one texel is 1/1024 ~ 9.8e-4. Smaller divisor = wider
+// stencil = softer waves; larger divisor = tighter stencil = crisper detail.
+// 512 ~= 2 texels: still stable, much sharper than the old 216.
+let deltaRates = dilation.map( d => 1/(512*d))
 // Damping scales with scale so larger scales settle faster (was previously dead code).
 let attenuate = 1.0 - (0.0005 * scale)
 console.log("Attenuation: ", attenuate);

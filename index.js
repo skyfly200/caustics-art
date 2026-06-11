@@ -132,6 +132,31 @@ let gustLength = 0
 let gustStart = 0
 let gustPosition,gustSize,gustMass
 
+// === Cymatics tuning ===
+// Per-band drive frequencies (rad/s). Fill in real eigenfreqs once 't' sweep finds them.
+let modeOmega = {
+  bass:    0.5,
+  lowMid:  1.0,
+  mid:     2.0,
+  highMid: 3.5,
+  treble:  5.0
+}
+// Fixed-mode test (key 'y')
+let modeTest = false
+let modeTestM = 4
+let modeTestN = 2
+let modeTestOmega = 1.0
+let modeTestAmp = 0.001
+// Sweep test (key 't'): sweeps omega over a range and logs which lock in
+let modeSweep = false
+let sweepM = 4
+let sweepN = 2
+let sweepOmegaMin = 0.1
+let sweepOmegaMax = 20.0
+let sweepDuration = 30000  // ms
+let sweepStartTime = 0
+let sweepLastLog = 0
+
 // Constants
 const black = new THREE.Color('black')
 const white = new THREE.Color('white')
@@ -307,7 +332,8 @@ const simUpdateFrag = `
       float h_new = 2.0 * h - h_prev + c * lap;
       h_new *= damping;
 
-      gl_FragColor = vec4(h_new, h, info.b, info.a);
+      // Store surface gradient in .ba so the water/caustics shaders get correct normals
+      gl_FragColor = vec4(h_new, h, hR - hL, hU - hD);
   }
 `;
 const simDropFrag = `
@@ -348,16 +374,17 @@ void main() {
 
     vec4 info = texture2D(texture, coord);
     float h = info.r;
-    float v = info.g;
+    float h_prev = info.g;
 
     if (r < radius) {
         float theta = atan(p.y, p.x);
         float mode = cos(m * theta) * sin(n * 3.14159265 * r / radius);
         float drive = sin(time * omega);
-        v += mode * amplitude * drive;   // <-- inject velocity, not height
+        // v_eff = h - h_prev, so to add velocity dv we subtract dv from h_prev
+        h_prev -= mode * amplitude * drive;
     }
 
-    gl_FragColor = vec4(h, v, info.b, info.a);
+    gl_FragColor = vec4(h, h_prev, info.b, info.a);
 }
 `;
 const resetFrag = `
@@ -448,14 +475,15 @@ class WaterSimulation {
     this._render(renderer, this._dropMesh);
   }
 
-  // Add an eigenmode (m, n) to the water surface
-  addMode(renderer, m, n, freq, amp) {
+  // Add an eigenmode (m, n) to the water surface.
+  // omega is the drive angular frequency in rad/s (sim time, not audio Hz).
+  addMode(renderer, m, n, omega, amp) {
     if (!this._modeMesh) return;
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
     this._modeMesh.material.uniforms.time.value = performance.now() * 0.001;
-    this._modeMesh.material.uniforms.omega.value = freq * 6.28318;
-    this._modeMesh.material.uniforms.amplitude.value = 0.0000001 * amp;  // extremely small
+    this._modeMesh.material.uniforms.omega.value = omega;
+    this._modeMesh.material.uniforms.amplitude.value = amp;
     this._render(renderer, this._modeMesh);
   }
 
@@ -906,6 +934,28 @@ function animate() {
 
   // Update the water
   if (clock.getElapsedTime() > 0.032) {
+    // Cymatics test harnesses (independent of audio)
+    if (modeTest) {
+      waterSimulation.addMode(renderer, modeTestM, modeTestN, modeTestOmega, modeTestAmp);
+    }
+    if (modeSweep) {
+      const now = performance.now();
+      const t = (now - sweepStartTime) / sweepDuration;
+      if (t >= 1.0) {
+        modeSweep = false;
+        console.log("sweep complete");
+      } else {
+        // Log-sweep so low frequencies get proportional dwell time
+        const logMin = Math.log(sweepOmegaMin);
+        const logMax = Math.log(sweepOmegaMax);
+        const omega = Math.exp(logMin + (logMax - logMin) * t);
+        waterSimulation.addMode(renderer, sweepM, sweepN, omega, 0.001);
+        if (now - sweepLastLog > 500) {
+          console.log(`sweep omega=${omega.toFixed(3)} rad/s  (${(t*100).toFixed(1)}%)`);
+          sweepLastLog = now;
+        }
+      }
+    }
     if (soundReactive && audio.audioLoaded) {
       let fd = audio.frequencyData;
       audio.analyser.getByteFrequencyData(fd);
@@ -918,18 +968,15 @@ function animate() {
       let highMid = fd[4] / 255;
       let treble = fd[5] / 255;
 
-      let gain = 0.000001;  // Keep low to prevent accumulation
+      let gain = 0.0001;
 
-      // let dt = clock.getElapsedTime();
-      // phase += dt * omega;
-      // let a = Math.sin(phase) * 0.002; // small!
-      // waterSimulation.addMode(renderer, polygonSides, 2, a);
-
-      // Add modes based on frequency bands
-      // waterSimulation.addMode(renderer, polygonSides, 1, gain * sub);
-      // waterSimulation.addMode(renderer, polygonSides, 2, gain * bass);
-      waterSimulation.addMode(renderer, polygonSides, 3, 440, gain * mid);
-      waterSimulation.addMode(renderer, polygonSides, 4, 10000, gain * treble);
+      // Drive at simulation-scale omegas (rad/s), not audio Hz. Amplitudes come from the bands.
+      // Tune these omegas using sweep mode (key 't').
+      waterSimulation.addMode(renderer, polygonSides, 1, modeOmega.bass,    gain * bass);
+      waterSimulation.addMode(renderer, polygonSides, 2, modeOmega.lowMid,  gain * lowMid);
+      waterSimulation.addMode(renderer, polygonSides, 3, modeOmega.mid,     gain * mid);
+      waterSimulation.addMode(renderer, polygonSides, 4, modeOmega.highMid, gain * highMid);
+      waterSimulation.addMode(renderer, polygonSides, 5, modeOmega.treble,  gain * treble);
 
 
       // const responders = audioReactivityRules.responders;
@@ -1023,6 +1070,20 @@ Promise.all([
         case 'e': camera.position.set(0, 0, 2); camera.rotation.x = 0; break;
         case 's': camera.position.set(0, -1.25, 1.66); camera.rotation.x = 35 * Math.PI / 180; break;
         case 'h': showWater = !showWater; break;
+        case 'y':
+          modeTest = !modeTest;
+          console.log(`mode test: ${modeTest} (m=${modeTestM}, n=${modeTestN}, omega=${modeTestOmega}, amp=${modeTestAmp})`);
+          break;
+        case 't':
+          modeSweep = !modeSweep;
+          if (modeSweep) {
+            sweepStartTime = performance.now();
+            sweepLastLog = 0;
+            console.log(`sweep start: m=${sweepM}, n=${sweepN}, omega ${sweepOmegaMin}->${sweepOmegaMax} rad/s over ${sweepDuration}ms`);
+          } else {
+            console.log("sweep cancelled");
+          }
+          break;
       }
     };
     if(randomStart) {

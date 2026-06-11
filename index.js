@@ -94,7 +94,7 @@ const height = canvas.height
 // TODO: create non linear mappings of random traits
 // TODO: create floor releifs as traits (maybe noise and pattern based normal maps?)
 // Art Controls and Config
-let simRes = 2**13
+let simRes = 2**11
 let soundReactive = false
 let mouseReactive = false
 let showWater = true

@@ -113,9 +113,12 @@ let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
 let dAmt = rng.skewedRandom(1000)
 let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, dAmt]) : [1,1] // ~ Trait
-let deltaRates = dilation.map( d => 1/(216*scale*d))
-// Damping to prevent energy accumulation
-let attenuate = 1.0 - (0.005 * scale)
+// delta is the neighbor-sampling distance for the laplacian. It must stay above
+// one texel (1/waterSize ~= 1e-3) or waves stop propagating. scale used to multiply
+// here, which broke the sim for scale > ~2. Keep delta tied only to dilation.
+let deltaRates = dilation.map( d => 1/(216*d))
+// Damping scales with scale so larger scales settle faster (was previously dead code).
+let attenuate = 1.0 - (0.0005 * scale)
 console.log("Attenuation: ", attenuate);
 
 let phase = 0;
@@ -438,7 +441,7 @@ class WaterSimulation {
     const updateMaterial = new THREE.RawShaderMaterial({
       uniforms: {
         delta: { value: deltaRates },
-        damping: { value: 0.998 },
+        damping: { value: attenuate },
         c: { value: 0.25 },
         texture: { value: null },
       },

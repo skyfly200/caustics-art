@@ -1,0 +1,19 @@
+{
+  "name": "caustics-art",
+  "version": "1.0.0",
+  "description": "A genrative art project to simulate water surface phenomena and the caustics cast by them.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skyfly200/caustics-art.git"
+  },
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/skyfly200/caustics-art/issues"
+  },
+  "homepage": "https://github.com/skyfly200/caustics-art#readme"
+}

@@ -138,14 +138,29 @@ let gustStart = 0
 let gustPosition,gustSize,gustMass
 
 // === Cymatics tuning ===
-// Per-band drive frequencies (rad/s). Fill in real eigenfreqs once 't' sweep finds them.
-let modeOmega = {
-  bass:    0.5,
-  lowMid:  1.0,
-  mid:     2.0,
-  highMid: 3.5,
-  treble:  5.0
-}
+// Audio-reactive cymatic bands. Each audio band drives one (m, n) mode at
+// its own omega. Low audio frequencies map to simple modes / slow drives;
+// high audio frequencies map to higher-order modes / faster drives.
+//   loHz, hiHz: audio frequency range to integrate into this band
+//   m, n: cymatic mode shape (angular lobes, radial bands)
+//   omega: simulation drive angular frequency in rad/s
+// Hand-tuned to walk diagonally through (m, n) space and the well-balanced
+// 0.3-5.0 rad/s omega range.
+let audioBands = [
+  { name: 'subBass', loHz: 20,    hiHz: 60,    m: 1, n: 1, omega: 0.4, smooth: 0 },
+  { name: 'bass',    loHz: 60,    hiHz: 250,   m: 2, n: 1, omega: 0.8, smooth: 0 },
+  { name: 'lowMid',  loHz: 250,   hiHz: 500,   m: 3, n: 2, omega: 1.2, smooth: 0 },
+  { name: 'mid',     loHz: 500,   hiHz: 2000,  m: 4, n: 2, omega: 1.8, smooth: 0 },
+  { name: 'highMid', loHz: 2000,  hiHz: 4000,  m: 6, n: 3, omega: 2.5, smooth: 0 },
+  { name: 'treble',  loHz: 4000,  hiHz: 12000, m: 8, n: 3, omega: 3.5, smooth: 0 },
+];
+// Overall amplitude scaling for audio-driven modes
+let audioGain = 0.003;
+// Exponential smoothing factor for per-band magnitude (0 = no smoothing,
+// closer to 1 = more smoothing / slower response).
+let audioSmoothing = 0.75;
+// Gate threshold below which a band is treated as silent
+let audioGate = 0.04;
 // Fixed-mode test (key 'y')
 let modeTest = false
 let modeTestM = 4
@@ -261,43 +276,23 @@ const plantLoaded = new Promise((resolve) => {
   });
 });
 
-// Audio Reactivity Settings
-let audioReactivityRules = {
-  bandCount: 32,
-  globalThreshold: 50,
-  debugResponders: false,
-  responders: [
-    { startBand: 1, endBand: 10, size: 9999, amp: 0.001, threshold: 240 }
-  ]
-}
-// let audioReactivityRules = {
-//   bandCount: 32768,
-//   globalThreshold: 50,
-//   debugResponders: false,
-//   responders: [
-//     { startBand: 0, endBand: 0, size: 0.2, amp: 0.01, threshold: 250 },
-//     { startBand: 1, endBand: 1, size: 0.1, amp: 0.015, threshold: 240 },
-//     { startBand: 2, endBand: 2, size: 0.075, amp: 0.02, threshold: 220 },
-//     { startBand: 3, endBand: 3, size: 0.05, amp: 0.025, threshold: 210 },
-//     { startBand: 4, endBand: 4, size: 0.033, amp: 0.025, threshold: 200 },
-//     { startBand: 10, endBand: 20, size: 0.01, amp: 0.05, threshold: 180 },
-//     { startBand: 20, endBand: 30, size: 0.05, amp: 0.03, threshold: 190 }
-//   ]
-// }
-
 class Audio {
   constructor() {
     this.frequencyData = null;
-    this.analyzer = null;
-    this.micLoaded =  false;
+    this.analyser = null;
+    this.micLoaded = false;
     this.audioLoaded = false;
   }
   startAudio() {
     // Get audio context and create an analyser node
     const audioContext = new (window.AudioContext || window.webkitAudioContext)();
     this.analyser = audioContext.createAnalyser();
-    // Set the FFT size (the number of bins in the frequency domain)
-    this.analyser.fftSize = audioReactivityRules.bandCount;
+    // fftSize=2048 gives 1024 freq bins, ~21 Hz/bin at 44.1 kHz - enough
+    // resolution for the bass/sub-bass bands that drive the largest modes.
+    this.analyser.fftSize = 2048;
+    // smoothingTimeConstant smooths the FFT magnitudes in the analyser node
+    // itself; our per-band audioSmoothing then layers on top.
+    this.analyser.smoothingTimeConstant = 0.5;
 
     try {
       // Get the microphone stream
@@ -1010,47 +1005,30 @@ function animate() {
       }
     }
     if (soundReactive && audio.audioLoaded) {
-      let fd = audio.frequencyData;
+      const fd = audio.frequencyData;
       audio.analyser.getByteFrequencyData(fd);
 
-      // TODO: use a logarithmic distribuition of frequency bands summed into needed bands
-      let sub = fd[0] / 255;
-      let bass = fd[1] / 255;
-      let lowMid = fd[2] / 255;
-      let mid = fd[3] / 255;
-      let highMid = fd[4] / 255;
-      let treble = fd[5] / 255;
+      // One Hz/bin at the current sample rate
+      const sampleRate = audio.analyser.context.sampleRate;
+      const binWidth = (sampleRate * 0.5) / fd.length;
 
-      let gain = 0.0001;
+      for (const band of audioBands) {
+        // Average bin magnitudes within the band's audio frequency range
+        const loBin = Math.max(0, Math.floor(band.loHz / binWidth));
+        const hiBin = Math.min(fd.length - 1, Math.ceil(band.hiHz / binWidth));
+        let sum = 0;
+        const count = hiBin - loBin + 1;
+        for (let i = loBin; i <= hiBin; i++) sum += fd[i];
+        const magnitude = count > 0 ? (sum / count) / 255 : 0;
 
-      // Drive at simulation-scale omegas (rad/s), not audio Hz. Amplitudes come from the bands.
-      // Tune these omegas using sweep mode (key 't').
-      waterSimulation.addMode(renderer, polygonSides, 1, modeOmega.bass,    gain * bass);
-      waterSimulation.addMode(renderer, polygonSides, 2, modeOmega.lowMid,  gain * lowMid);
-      waterSimulation.addMode(renderer, polygonSides, 3, modeOmega.mid,     gain * mid);
-      waterSimulation.addMode(renderer, polygonSides, 4, modeOmega.highMid, gain * highMid);
-      waterSimulation.addMode(renderer, polygonSides, 5, modeOmega.treble,  gain * treble);
+        // Exponential smoothing for stable mode drive (prevents per-frame jitter)
+        band.smooth = audioSmoothing * band.smooth + (1 - audioSmoothing) * magnitude;
 
-
-      // const responders = audioReactivityRules.responders;
-      // for (const r in responders) {
-      //   let threshold = audioReactivityRules.globalThreshold / 255 * responders[r].threshold;
-      //   let posX = randPos ? Math.random() * 2 - 1 : 0;
-      //   let posY = randPos ? Math.random() * 2 - 1 : 0;
-
-      //   if (responders[r].startBand === responders[r].endBand) {
-      //     // Single band responder
-      //     if (audioReactivityRules.debugResponders) console.log(responders[r].startBand, fd[responders[r].startBand], fd[responders[r].startBand] > threshold, threshold);
-      //       waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (audio.frequencyData[responders[r].startBand] > threshold ? responders[r].amp : 0 ));
-      //   } else {
-      //     // Range of bands responder
-      //     let totalAmp = 0;
-      //     for (let i = responders[r].startBand; i <= responders[r].endBand; i++) totalAmp += fd[i];
-      //     let avgAmp = totalAmp / (responders[r].endBand - responders[r].startBand + 1);
-      //     if (audioReactivityRules.debugResponders) console.log(responders[r].startBand + "-" + responders[r].endBand, avgAmp, avgAmp > threshold, threshold);
-      //       waterSimulation.addDrop(renderer, posX, posY, responders[r].size, (avgAmp > threshold ? responders[r].amp : 0));
-      //   }
-      // } 
+        // Gate quiet bands so they don't bleed energy when there's no signal
+        if (band.smooth > audioGate) {
+          waterSimulation.addMode(renderer, band.m, band.n, band.omega, audioGain * band.smooth);
+        }
+      }
     }
 
     waterSimulation.stepSimulation(renderer);

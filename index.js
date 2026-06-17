@@ -858,7 +858,12 @@ const envFrag = `
       );
       computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
     }
-    gl_FragColor = vec4(underwaterColor * computedLightIntensity, 1.);
+    // Reinhard tonemap on the final color compresses caustic peaks smoothly
+    // instead of clipping at 1.0, which previously produced hard plateaus
+    // along the brightness gradients of focused ripples.
+    vec3 color = underwaterColor * computedLightIntensity;
+    color = color / (1.0 + color);
+    gl_FragColor = vec4(color, 1.);
   }
 `;
 class Environment {

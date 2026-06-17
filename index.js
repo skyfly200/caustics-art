@@ -161,6 +161,20 @@ let sweepOmegaMax = 20.0
 let sweepDuration = 30000  // ms
 let sweepStartTime = 0
 let sweepLastLog = 0
+// Random resonance (key 'p'): re-rolls a random (m,n,omega) and drives it
+let modeRandom = false
+let modeRandomM = 4
+let modeRandomN = 2
+let modeRandomOmega = 1.0
+let modeRandomAmp = 0.001
+function rollRandomMode() {
+  modeRandomM = Math.floor(Math.random() * 8) + 1;  // 1..8 angular lobes
+  modeRandomN = Math.floor(Math.random() * 5) + 1;  // 1..5 radial bands
+  // log-uniform omega across the well-balanced range
+  modeRandomOmega = Math.exp(Math.log(0.3) + Math.random() * Math.log(5.0/0.3));
+  modeRandomAmp = 0.001;
+  console.log(`random mode: m=${modeRandomM}, n=${modeRandomN}, omega=${modeRandomOmega.toFixed(3)} rad/s`);
+}
 
 // Constants
 const black = new THREE.Color('black')
@@ -974,6 +988,9 @@ function animate() {
     if (modeTest) {
       waterSimulation.addMode(renderer, modeTestM, modeTestN, modeTestOmega, modeTestAmp);
     }
+    if (modeRandom) {
+      waterSimulation.addMode(renderer, modeRandomM, modeRandomN, modeRandomOmega, modeRandomAmp);
+    }
     if (modeSweep) {
       const now = performance.now();
       const t = (now - sweepStartTime) / sweepDuration;
@@ -1101,7 +1118,16 @@ Promise.all([
         case 'm': if (!audio.audioLoaded) audio.startAudio(); soundReactive = !soundReactive; break;
         case 'r': raindrops = !raindrops; console.log("rain: ", raindrops); break;
         case 'w': wind = !wind; console.log("wind: ", wind); break;
-        case 'c': waterSimulation.resetSimulation(renderer); break;
+        case 'c':
+          waterSimulation.resetSimulation(renderer);
+          modeTest = false;
+          modeSweep = false;
+          modeRandom = false;
+          break;
+        case 'p':
+          rollRandomMode();
+          modeRandom = true;
+          break;
         case 'd': camera.position.set(0, 0, 6); camera.rotation.x = 0; break;
         case 'e': camera.position.set(0, 0, 2); camera.rotation.x = 0; break;
         case 's': camera.position.set(0, -1.25, 1.66); camera.rotation.x = 35 * Math.PI / 180; break;

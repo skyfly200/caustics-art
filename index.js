@@ -695,6 +695,13 @@ const causticFrag = `
           ratio = oldArea / newArea;
         }
         causticsIntensity = causticsFactor * ratio;
+        // Soft-cap at the source. ratio blows up when newArea -> 0 at focal
+        // points, generating values like 50+ that all collapse to ~1.0 under
+        // any final tonemap and read as flat plateaus. Compressing here
+        // bounds each contribution at ~10 while preserving low-intensity
+        // gradient. Asymptote = 1/compressK = 10.
+        const float compressK = 0.1;
+        causticsIntensity = causticsIntensity / (1.0 + compressK * causticsIntensity);
       }
       gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
     }

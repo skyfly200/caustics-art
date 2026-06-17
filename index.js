@@ -119,8 +119,10 @@ let dilation = rng.random_dec() < .1 ? (rng.random_dec() < .5 ? [dAmt, 1]: [1, d
 // 1024 = one texel (canonical finite-difference). Tightest stencil before
 // stability breaks down.
 let deltaRates = dilation.map( d => 1/(1024*d))
-// Damping scales with scale so larger scales settle faster (was previously dead code).
-let attenuate = 1.0 - (0.0005 * scale)
+// Damping scales with scale so larger scales settle faster. Coefficient
+// bumped from 0.0005 to 0.002 so waves settle in a few seconds instead of
+// many - adjustable live via the settings drawer.
+let attenuate = 1.0 - (0.002 * scale)
 console.log("Attenuation: ", attenuate);
 
 let phase = 0;
@@ -524,6 +526,11 @@ class WaterSimulation {
 
   stepSimulation(renderer) {
     this._render(renderer, this._updateMesh);
+  }
+
+  // Live setter for the damping coefficient (0..1; lower = more damping).
+  setDamping(value) {
+    this._updateMesh.material.uniforms.damping.value = value;
   }
 
   _render(renderer, mesh) {
@@ -1176,6 +1183,10 @@ function setupUI() {
     set('opt-wind', 'checked', wind);
     set('opt-audio', 'checked', soundReactive);
     set('opt-mouse', 'checked', mouseReactive);
+    // Slider shows the damping amount (1 - uniform). Higher slider = faster settling.
+    const dampingAmount = 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value;
+    set('opt-damping', 'value', dampingAmount);
+    fmt('val-damping', dampingAmount, 4);
     set('opt-intensity', 'value', intensity);
     fmt('val-intensity', intensity, 2);
     set('opt-wind-intensity', 'value', windIntensity);
@@ -1227,6 +1238,7 @@ function setupUI() {
       if (val) val.textContent = v.toFixed(digits);
     });
   };
+  bind('opt-damping',         'val-damping',         4, v => { waterSimulation.setDamping(1.0 - v); });
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
   bind('opt-wind-intensity',  'val-wind-intensity',  3, v => { windIntensity = v; });
   bind('opt-audio-gain',      'val-audio-gain',      5, v => { audioGain = v; });

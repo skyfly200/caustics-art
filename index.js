@@ -155,7 +155,7 @@ let audioBands = [
   { name: 'treble',  loHz: 4000,  hiHz: 12000, m: 8, n: 3, omega: 3.5, smooth: 0 },
 ];
 // Overall amplitude scaling for audio-driven modes
-let audioGain = 0.003;
+let audioGain = 0.0003;
 // Exponential smoothing factor for per-band magnitude (0 = no smoothing,
 // closer to 1 = more smoothing / slower response).
 let audioSmoothing = 0.75;
@@ -1174,7 +1174,7 @@ function setupUI() {
     set('opt-wind-intensity', 'value', windIntensity);
     fmt('val-wind-intensity', windIntensity, 3);
     set('opt-audio-gain', 'value', audioGain);
-    fmt('val-audio-gain', audioGain, 4);
+    fmt('val-audio-gain', audioGain, 5);
     set('opt-audio-smooth', 'value', audioSmoothing);
     fmt('val-audio-smooth', audioSmoothing, 2);
     set('opt-audio-gate', 'value', audioGate);
@@ -1222,7 +1222,7 @@ function setupUI() {
   };
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
   bind('opt-wind-intensity',  'val-wind-intensity',  3, v => { windIntensity = v; });
-  bind('opt-audio-gain',      'val-audio-gain',      4, v => { audioGain = v; });
+  bind('opt-audio-gain',      'val-audio-gain',      5, v => { audioGain = v; });
   bind('opt-audio-smooth',    'val-audio-smooth',    2, v => { audioSmoothing = v; });
   bind('opt-audio-gate',      'val-audio-gate',      3, v => { audioGate = v; });
 }

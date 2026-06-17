@@ -498,11 +498,18 @@ class WaterSimulation {
   // omega is the drive angular frequency in rad/s (sim time, not audio Hz).
   addMode(renderer, m, n, omega, amp) {
     if (!this._modeMesh) return;
+    // Compensate frequency-dependent gain: velocity-driven excitation produces
+    // displacement inversely proportional to omega, so amplitude looks huge at
+    // low omega and weak at high omega. Scaling amp linearly with omega gives
+    // a roughly flat perceived response across the sweep range. OMEGA_REF is
+    // the sweet spot found empirically (66% of the 0.1->20 log-sweep).
+    const OMEGA_REF = 3.3;
+    const effectiveAmp = amp * omega / OMEGA_REF;
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
     this._modeMesh.material.uniforms.time.value = performance.now() * 0.001;
     this._modeMesh.material.uniforms.omega.value = omega;
-    this._modeMesh.material.uniforms.amplitude.value = amp;
+    this._modeMesh.material.uniforms.amplitude.value = effectiveAmp;
     this._render(renderer, this._modeMesh);
   }
 

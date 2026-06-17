@@ -498,13 +498,14 @@ class WaterSimulation {
   // omega is the drive angular frequency in rad/s (sim time, not audio Hz).
   addMode(renderer, m, n, omega, amp) {
     if (!this._modeMesh) return;
-    // Compensate frequency-dependent gain: velocity-driven excitation produces
-    // displacement inversely proportional to omega, so amplitude looks huge at
-    // low omega and weak at high omega. Scaling amp linearly with omega gives
-    // a roughly flat perceived response across the sweep range. OMEGA_REF is
-    // the sweet spot found empirically (66% of the 0.1->20 log-sweep).
-    const OMEGA_REF = 3.3;
-    const effectiveAmp = amp * omega / OMEGA_REF;
+    // Compensate frequency-dependent gain. Natural response falls off with
+    // omega but not as steeply as 1/omega, so linear comp overshoots.
+    // sqrt scaling at REF=1.4 rad/s (50% sweet spot of the t-sweep) gives a
+    // gentler half-strength correction. Lower OMEGA_EXP -> milder, higher ->
+    // stronger compensation.
+    const OMEGA_REF = 1.4;
+    const OMEGA_EXP = 0.5;
+    const effectiveAmp = amp * Math.pow(omega / OMEGA_REF, OMEGA_EXP);
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
     this._modeMesh.material.uniforms.time.value = performance.now() * 0.001;
@@ -931,8 +932,12 @@ function animate() {
       gustDuration = ((18 * Math.random()) + 2) * 1000;
       gustPosition = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
       gustDirection = {x: Math.random() * 2 - 1, y: Math.random() * 2 - 1};
-      gustSize = Math.random() * 0.1 + 0.05;
-      gustMass = Math.random() * 0.01;
+      // Gust base size/mass. addDrop further multiplies by 1/sqrt(scale) so
+      // these stay consistent with rain across simulation scale traits.
+      // Wind used to dwarf rain by ~30x; these values match rain ranges
+      // (rain: size 0..0.05, mass 0..0.025).
+      gustSize = Math.random() * 0.03 + 0.02;   // 0.02..0.05
+      gustMass = Math.random() * 0.005;          // 0..0.005
       gustAmplitude = 0;
       gustEnvelope = createADSR(0.2, 0.2, 0.6, 0.4, gustDuration);
     }
@@ -946,9 +951,11 @@ function animate() {
           x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
           y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
         };
-        var dropletSize = gustSize + (Math.random() * 0.02 - 0.01);
-        var dropletMass = gustMass + (Math.random() - 0.5) * 0.002;
-        var numDroplets = Math.floor(gustAmplitude * 10);
+        var dropletSize = gustSize + (Math.random() * 0.01 - 0.005);
+        var dropletMass = gustMass + (Math.random() - 0.5) * 0.001;
+        // Was Math.floor(gustAmplitude * 10): up to 10 drops per frame.
+        // Cut to ~3 max - still feels like a gust, far less energy.
+        var numDroplets = Math.floor(gustAmplitude * 3);
         for (var i = 0; i < numDroplets; i++) {
           waterSimulation.addDrop(
             renderer,

@@ -662,8 +662,12 @@ const causticFrag = `
     void main() {
       float causticsIntensity = 0.;
       if (depth >= waterDepth) {
-        float oldArea = length(dFdx(oldPosition)) * length(dFdy(oldPosition));
-        float newArea = length(dFdx(newPosition)) * length(dFdy(newPosition));
+        // Use the full Jacobian magnitude (cross product of partial derivatives)
+        // instead of |dFdx| * |dFdy|. The latter is the axis-aligned bounding
+        // rectangle and biases caustic intensity into a cross/diamond pattern
+        // even when the underlying water surface is perfectly isotropic.
+        float oldArea = length(cross(dFdx(oldPosition), dFdy(oldPosition)));
+        float newArea = length(cross(dFdx(newPosition), dFdy(newPosition)));
         float ratio;
         // Prevent dividing by zero (debug NVidia drivers)
         if (newArea == 0.) {

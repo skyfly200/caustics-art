@@ -364,7 +364,10 @@ const simDropFrag = `
       vec4 info = texture2D(texture, coord);
       /* Add the drop to the height */
       float drop = max(0.0, 1.0 - length(center * 0.5 + 0.5 - coord) / radius);
-      drop = 0.5 - cos(drop * PI) * 0.5;
+      // Sharper falloff than the cos bell: gives steeper wavefronts and
+      // crisper caustics. pow(d, 3) concentrates energy at the center while
+      // keeping a smooth (C1) edge so the laplacian stays well-conditioned.
+      drop = drop * drop * drop;
       info.r += drop * strength;
       gl_FragColor = info;
     }
@@ -835,8 +838,8 @@ const envFrag = `
     if (causticsDepth > lightPosition.z - bias) {
       // Percentage Close Filtering
       float causticsIntensity = 0.5 * (
-        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.25)) +
-        blur(caustics, lightPosition.xy, resolution, vec2(0.25, 0.))
+        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.125)) +
+        blur(caustics, lightPosition.xy, resolution, vec2(0.125, 0.))
       );
       computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
     }

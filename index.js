@@ -498,13 +498,12 @@ class WaterSimulation {
   // omega is the drive angular frequency in rad/s (sim time, not audio Hz).
   addMode(renderer, m, n, omega, amp) {
     if (!this._modeMesh) return;
-    // Compensate frequency-dependent gain. Natural response falls off with
-    // omega but not as steeply as 1/omega, so linear comp overshoots.
-    // sqrt scaling at REF=1.4 rad/s (50% sweet spot of the t-sweep) gives a
-    // gentler half-strength correction. Lower OMEGA_EXP -> milder, higher ->
-    // stronger compensation.
-    const OMEGA_REF = 1.4;
-    const OMEGA_EXP = 0.5;
+    // Compensate frequency-dependent gain. Iterative tuning: linear overshot,
+    // sqrt still tilted low-weak/high-strong. Natural falloff exponent is
+    // shallower than expected (~0.3). REF=0.83 rad/s puts the unity-gain
+    // point at the 40% mark of the t-sweep.
+    const OMEGA_REF = 0.83;
+    const OMEGA_EXP = 0.3;
     const effectiveAmp = amp * Math.pow(omega / OMEGA_REF, OMEGA_EXP);
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;

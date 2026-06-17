@@ -331,8 +331,17 @@ const simUpdateFrag = `
       float hR = texture2D(texture, coord + dx).r;
       float hD = texture2D(texture, coord - dy).r;
       float hU = texture2D(texture, coord + dy).r;
+      // Corner samples for 9-point isotropic laplacian (kills grid-aligned
+      // cross/diamond artifacts that come from the 5-point stencil).
+      float hNE = texture2D(texture, coord + dx + dy).r;
+      float hNW = texture2D(texture, coord - dx + dy).r;
+      float hSE = texture2D(texture, coord + dx - dy).r;
+      float hSW = texture2D(texture, coord - dx - dy).r;
 
-      float lap = (hL + hR + hD + hU - 4.0 * h);
+      // 9-point isotropic laplacian (Patra-Karttunen): cardinal weight 4,
+      // corner weight 1, center weight -20, normalized by 1/6 so the wave
+      // speed roughly matches the old 5-point version at the same c.
+      float lap = (4.0*(hL + hR + hD + hU) + (hNE + hNW + hSE + hSW) - 20.0*h) / 6.0;
 
       float h_new = 2.0 * h - h_prev + c * lap;
       h_new *= damping;

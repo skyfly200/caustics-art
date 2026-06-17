@@ -364,10 +364,9 @@ const simDropFrag = `
       vec4 info = texture2D(texture, coord);
       /* Add the drop to the height */
       float drop = max(0.0, 1.0 - length(center * 0.5 + 0.5 - coord) / radius);
-      // Sharper falloff than the cos bell: gives steeper wavefronts and
-      // crisper caustics. pow(d, 3) concentrates energy at the center while
-      // keeping a smooth (C1) edge so the laplacian stays well-conditioned.
-      drop = drop * drop * drop;
+      // Quadratic falloff: a touch sharper than the original cos bell so
+      // wavefronts stay crisp, but milder than the cubic which over-sharpened.
+      drop = drop * drop;
       info.r += drop * strength;
       gl_FragColor = info;
     }

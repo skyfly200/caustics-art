@@ -1136,8 +1136,96 @@ Promise.all([
         waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.025*(i&1||-1));
       }
     }
+    setupUI();
     animate();
 });
+
+// Wire the floating settings & help buttons to the drawer panels in index.html.
+// Settings controls bidirectionally mirror the runtime state vars; drawers
+// re-sync from current values whenever they're opened so that keyboard
+// toggles stay reflected in the UI.
+function setupUI() {
+  const settingsBtn = document.getElementById('settings-toggle');
+  const helpBtn = document.getElementById('help-toggle');
+  const settingsDrawer = document.getElementById('settings-drawer');
+  const helpDrawer = document.getElementById('help-drawer');
+
+  function closeAll() {
+    settingsDrawer.classList.remove('open');
+    helpDrawer.classList.remove('open');
+  }
+
+  // Sync the inputs from the current global state
+  function syncFromState() {
+    const set = (id, prop, val) => {
+      const el = document.getElementById(id);
+      if (el) el[prop] = val;
+    };
+    const fmt = (id, val, digits) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = Number(val).toFixed(digits);
+    };
+    set('opt-rain', 'checked', raindrops);
+    set('opt-wind', 'checked', wind);
+    set('opt-audio', 'checked', soundReactive);
+    set('opt-mouse', 'checked', mouseReactive);
+    set('opt-intensity', 'value', intensity);
+    fmt('val-intensity', intensity, 2);
+    set('opt-wind-intensity', 'value', windIntensity);
+    fmt('val-wind-intensity', windIntensity, 3);
+    set('opt-audio-gain', 'value', audioGain);
+    fmt('val-audio-gain', audioGain, 4);
+    set('opt-audio-smooth', 'value', audioSmoothing);
+    fmt('val-audio-smooth', audioSmoothing, 2);
+    set('opt-audio-gate', 'value', audioGate);
+    fmt('val-audio-gate', audioGate, 3);
+  }
+
+  settingsBtn.addEventListener('click', () => {
+    const isOpen = settingsDrawer.classList.contains('open');
+    closeAll();
+    if (!isOpen) { syncFromState(); settingsDrawer.classList.add('open'); }
+  });
+  helpBtn.addEventListener('click', () => {
+    const isOpen = helpDrawer.classList.contains('open');
+    closeAll();
+    if (!isOpen) helpDrawer.classList.add('open');
+  });
+  document.querySelectorAll('.drawer .close').forEach(btn => {
+    btn.addEventListener('click', closeAll);
+  });
+
+  // Source toggles
+  document.getElementById('opt-rain').addEventListener('change', e => {
+    raindrops = e.target.checked;
+  });
+  document.getElementById('opt-wind').addEventListener('change', e => {
+    wind = e.target.checked;
+  });
+  document.getElementById('opt-audio').addEventListener('change', e => {
+    if (e.target.checked && !audio.audioLoaded) audio.startAudio();
+    soundReactive = e.target.checked;
+  });
+  document.getElementById('opt-mouse').addEventListener('change', e => {
+    mouseReactive = e.target.checked;
+  });
+
+  // Sliders with live value display
+  const bind = (id, valId, digits, setter) => {
+    const el = document.getElementById(id);
+    const val = document.getElementById(valId);
+    el.addEventListener('input', e => {
+      const v = parseFloat(e.target.value);
+      setter(v);
+      if (val) val.textContent = v.toFixed(digits);
+    });
+  };
+  bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
+  bind('opt-wind-intensity',  'val-wind-intensity',  3, v => { windIntensity = v; });
+  bind('opt-audio-gain',      'val-audio-gain',      4, v => { audioGain = v; });
+  bind('opt-audio-smooth',    'val-audio-smooth',    2, v => { audioSmoothing = v; });
+  bind('opt-audio-gate',      'val-audio-gate',      3, v => { audioGate = v; });
+}
 
 
 // TODO: 

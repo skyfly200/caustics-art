@@ -7,11 +7,184 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/three@v0.124.0"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/three@v0.117.0/examples/js/loaders/OBJLoader.js"></script>
     <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/stats.js/r16/Stats.js"></script>
+    <style>
+      .ui-btn {
+        position: fixed;
+        top: 12px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 8px;
+        width: 40px;
+        height: 40px;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: sans-serif;
+        backdrop-filter: blur(4px);
+      }
+      .ui-btn:hover { background: rgba(0, 0, 0, 0.75); }
+      #settings-toggle { right: 12px; }
+      #help-toggle { right: 62px; }
+      .drawer {
+        position: fixed;
+        top: 0;
+        right: -360px;
+        width: 320px;
+        height: 100%;
+        background: rgba(15, 15, 18, 0.92);
+        color: #eee;
+        padding: 60px 20px 20px;
+        overflow-y: auto;
+        transition: right 0.25s ease;
+        z-index: 99;
+        box-sizing: border-box;
+        font-family: sans-serif;
+        font-size: 13px;
+        backdrop-filter: blur(6px);
+        border-left: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .drawer.open { right: 0; }
+      .drawer h3 {
+        margin: 0 0 12px;
+        font-size: 16px;
+        font-weight: 600;
+        color: #fff;
+      }
+      .drawer h4 {
+        margin: 18px 0 6px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #aaa;
+      }
+      .drawer label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 8px 0;
+        gap: 10px;
+        line-height: 1.4;
+      }
+      .drawer label.toggle {
+        cursor: pointer;
+      }
+      .drawer input[type="checkbox"] {
+        cursor: pointer;
+        width: 16px;
+        height: 16px;
+      }
+      .drawer input[type="range"] {
+        flex: 1;
+        min-width: 0;
+      }
+      .drawer .value {
+        font-family: monospace;
+        font-size: 11px;
+        color: #888;
+        min-width: 40px;
+        text-align: right;
+      }
+      .drawer ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+      .drawer li {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      .drawer kbd {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 3px;
+        padding: 2px 8px;
+        font-family: monospace;
+        font-size: 12px;
+        color: #fff;
+        min-width: 22px;
+        text-align: center;
+      }
+      .drawer hr {
+        border: none;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        margin: 16px 0 8px;
+      }
+      .drawer .close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: none;
+        border: none;
+        color: #aaa;
+        font-size: 20px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .drawer .close:hover { color: #fff; }
+    </style>
   </head>
   <body>
-    <canvas id="canvas" style=""></canvas> 
-    <h3>Thanks to Martin Renou for the examples and shader code</h3>
-    <h4><a href="https://martinrenou.github.io/threejs-caustics/">Checkout their code on github</a></h4>
+    <canvas id="canvas" style=""></canvas>
+
+    <button id="help-toggle" class="ui-btn" title="Keyboard shortcuts">?</button>
+    <button id="settings-toggle" class="ui-btn" title="Settings">&#9881;</button>
+
+    <div id="settings-drawer" class="drawer">
+      <button class="close" data-close="settings-drawer">&times;</button>
+      <h3>Settings</h3>
+
+      <h4>Sources</h4>
+      <label class="toggle"><span>Rain</span><input type="checkbox" id="opt-rain"></label>
+      <label class="toggle"><span>Wind</span><input type="checkbox" id="opt-wind"></label>
+      <label class="toggle"><span>Audio reactive</span><input type="checkbox" id="opt-audio"></label>
+      <label class="toggle"><span>Mouse interaction</span><input type="checkbox" id="opt-mouse"></label>
+
+      <h4>Rain</h4>
+      <label><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="1" step="0.01"><span class="value" id="val-intensity"></span></label>
+
+      <h4>Wind</h4>
+      <label><span>Gust rate</span><input type="range" id="opt-wind-intensity" min="0" max="0.05" step="0.001"><span class="value" id="val-wind-intensity"></span></label>
+
+      <h4>Audio</h4>
+      <label><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.02" step="0.0005"><span class="value" id="val-audio-gain"></span></label>
+      <label><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
+      <label><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
+    </div>
+
+    <div id="help-drawer" class="drawer">
+      <button class="close" data-close="help-drawer">&times;</button>
+      <h3>Keyboard shortcuts</h3>
+      <h4>Sources</h4>
+      <ul>
+        <li><span>Rain on / off</span><kbd>r</kbd></li>
+        <li><span>Wind on / off</span><kbd>w</kbd></li>
+        <li><span>Audio reactive</span><kbd>m</kbd></li>
+      </ul>
+      <h4>Cymatics</h4>
+      <ul>
+        <li><span>Fixed mode test</span><kbd>y</kbd></li>
+        <li><span>Sweep test (m=4, n=2)</span><kbd>t</kbd></li>
+        <li><span>Random mode</span><kbd>p</kbd></li>
+      </ul>
+      <h4>Scene</h4>
+      <ul>
+        <li><span>Clear surface</span><kbd>c</kbd></li>
+        <li><span>Hide / show water</span><kbd>h</kbd></li>
+        <li><span>Distant view</span><kbd>d</kbd></li>
+        <li><span>Even view</span><kbd>e</kbd></li>
+        <li><span>Side view</span><kbd>s</kbd></li>
+      </ul>
+    </div>
+
     <script type="text/javascript" src="index.js"></script>
   </body>
 </html>

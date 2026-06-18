@@ -1062,9 +1062,12 @@ function animate() {
     clock.start();
   }
 
-  // Render everything but the refractive water
+  // Render everything but the refractive water.
+  // Clear the envMap to black so refracted rays that miss the underwater
+  // floor (when ripples tilt the surface steeply) sample dark instead of
+  // pure white, which previously read as bright clipping spikes on ripples.
   renderer.setRenderTarget(temporaryRenderTarget);
-  renderer.setClearColor(white, 1);
+  renderer.setClearColor(black, 1);
   renderer.clear();
   water.mesh.visible = false;
   renderer.render(scene, camera);

@@ -164,6 +164,45 @@ let audioGain = 0.0003;
 let audioSmoothing = 0.75;
 // Gate threshold below which a band is treated as silent
 let audioGate = 0.04;
+
+// === Resonance model ===
+// Circular-drum eigenfrequencies: bessel_zeros[m][n-1] = alpha_{m,n}, the
+// n-th positive zero of J_m. Modes 0..8 angular, 1..5 radial.
+const bessel_zeros = [
+  [2.4048,  5.5201,  8.6537, 11.7915, 14.9309], // m=0
+  [3.8317,  7.0156, 10.1735, 13.3237, 16.4706], // m=1
+  [5.1356,  8.4172, 11.6198, 14.7960, 17.9598], // m=2
+  [6.3802,  9.7610, 13.0152, 16.2235, 19.4094], // m=3
+  [7.5883, 11.0647, 14.3725, 17.6160, 20.8269], // m=4
+  [8.7715, 12.3386, 15.7002, 18.9801, 22.2178], // m=5
+  [9.9361, 13.5893, 17.0038, 20.3208, 23.5861], // m=6
+  [11.0864, 14.8213, 18.2876, 21.6415, 24.9349], // m=7
+  [12.2251, 16.0378, 19.5545, 22.9452, 26.2668], // m=8
+];
+
+const SIM_DT = 1/30;    // nominal step interval gated by the animate loop
+const SIM_C  = 0.25;    // c uniform on simUpdateFrag
+const SIM_R  = 0.9;     // simulation domain radius (CircleGeometry)
+
+// Estimated natural angular frequency (rad/s wall-clock) of cymatic mode
+// (m, n) given the current sim. Uses the circular-drum approximation;
+// dilation enters via the geometric mean of the two directional deltas.
+function computeEigenOmega(m, n) {
+  let alpha;
+  if (m >= 0 && m < bessel_zeros.length && n >= 1 && n <= bessel_zeros[m].length) {
+    alpha = bessel_zeros[m][n - 1];
+  } else {
+    // McMahon's asymptotic fallback for modes outside the table
+    alpha = (n + m / 2 - 0.25) * Math.PI;
+  }
+  const dx = Math.sqrt(deltaRates[0] * deltaRates[1]);
+  return Math.sqrt(SIM_C) * alpha / SIM_R * (dx / SIM_DT);
+}
+
+// When true, audio bands + random mode drive at the computed eigenfrequency
+// for the mode (so they hit true resonance). When false, they use the
+// hand-tuned omega values configured per band / random uniform.
+let eigenTune = true;
 // Fixed-mode test (key 'y')
 let modeTest = false
 let modeTestM = 4
@@ -188,10 +227,11 @@ let modeRandomAmp = 0.001
 function rollRandomMode() {
   modeRandomM = Math.floor(Math.random() * 8) + 1;  // 1..8 angular lobes
   modeRandomN = Math.floor(Math.random() * 5) + 1;  // 1..5 radial bands
-  // log-uniform omega across the well-balanced range
-  modeRandomOmega = Math.exp(Math.log(0.3) + Math.random() * Math.log(5.0/0.3));
+  modeRandomOmega = eigenTune
+    ? computeEigenOmega(modeRandomM, modeRandomN)
+    : Math.exp(Math.log(0.3) + Math.random() * Math.log(5.0/0.3));
   modeRandomAmp = 0.001;
-  console.log(`random mode: m=${modeRandomM}, n=${modeRandomN}, omega=${modeRandomOmega.toFixed(3)} rad/s`);
+  console.log(`random mode: m=${modeRandomM}, n=${modeRandomN}, omega=${modeRandomOmega.toFixed(3)} rad/s (eigenTune=${eigenTune})`);
 }
 
 // Constants
@@ -1062,7 +1102,8 @@ function animate() {
 
         // Gate quiet bands so they don't bleed energy when there's no signal
         if (band.smooth > audioGate) {
-          waterSimulation.addMode(renderer, band.m, band.n, band.omega, audioGain * band.smooth);
+          const omega = eigenTune ? computeEigenOmega(band.m, band.n) : band.omega;
+          waterSimulation.addMode(renderer, band.m, band.n, omega, audioGain * band.smooth);
         }
       }
     }
@@ -1259,6 +1300,31 @@ function setupUI() {
     fmt('val-audio-smooth', audioSmoothing, 2);
     set('opt-audio-gate', 'value', audioGate);
     fmt('val-audio-gate', audioGate, 3);
+    set('opt-eigen-tune', 'checked', eigenTune);
+    renderReadout();
+  }
+
+  // Read-only display of derived values: traits, deltas, computed eigenfreqs
+  function renderReadout() {
+    const el = document.getElementById('computed-readout');
+    if (!el) return;
+    const row = (label, value) => `<div class="row"><span>${label}</span><span>${value}</span></div>`;
+    const sep = `<div class="sep"></div>`;
+    let html = '';
+    html += row('Polygon sides', polygonSides);
+    html += row('Scale', scale);
+    html += row('Start drops', startDrops);
+    html += row('Time dilation', `[${dilation[0].toFixed(3)}, ${dilation[1].toFixed(3)}]`);
+    html += row('dAmt', dAmt);
+    html += row('Delta', `[${deltaRates[0].toExponential(2)}, ${deltaRates[1].toExponential(2)}]`);
+    html += row('Damping uniform', waterSimulation._updateMesh.material.uniforms.damping.value.toFixed(4));
+    html += sep;
+    html += '<div class="row"><span>Eigenfreqs (rad/s)</span><span></span></div>';
+    for (const band of audioBands) {
+      const omega = computeEigenOmega(band.m, band.n);
+      html += row(`&nbsp;&nbsp;${band.name} (${band.m},${band.n})`, omega.toFixed(4));
+    }
+    el.innerHTML = html;
   }
 
   settingsBtn.addEventListener('click', () => {
@@ -1289,6 +1355,10 @@ function setupUI() {
   document.getElementById('opt-mouse').addEventListener('change', e => {
     mouseReactive = e.target.checked;
   });
+  document.getElementById('opt-eigen-tune').addEventListener('change', e => {
+    eigenTune = e.target.checked;
+    renderReadout();
+  });
 
   // Sliders with live value display
   const bind = (id, valId, digits, setter) => {
@@ -1303,6 +1373,7 @@ function setupUI() {
   document.getElementById('opt-reroll').addEventListener('click', () => {
     reroll();
     syncFromState();
+    renderReadout();
   });
   bind('opt-damping',         'val-damping',         4, v => { waterSimulation.setDamping(1.0 - v); });
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });

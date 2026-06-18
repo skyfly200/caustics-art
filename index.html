@@ -145,6 +145,29 @@
         text-align: center;
       }
       .drawer .action:hover { background: rgba(255, 255, 255, 0.16); }
+      .drawer .readout {
+        font-family: monospace;
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+        padding: 8px 10px;
+        color: #ccc;
+        line-height: 1.6;
+      }
+      .drawer .readout .row {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .drawer .readout .row span:last-child {
+        color: #fff;
+        text-align: right;
+      }
+      .drawer .readout .sep {
+        border-top: 1px dashed rgba(255, 255, 255, 0.1);
+        margin: 4px 0;
+      }
     </style>
   </head>
   <body>
@@ -178,6 +201,12 @@
       <label><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.003" step="0.00005"><span class="value" id="val-audio-gain"></span></label>
       <label><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
       <label><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
+
+      <h4>Cymatics</h4>
+      <label class="toggle"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
+
+      <h4>Computed values</h4>
+      <div class="readout" id="computed-readout"></div>
     </div>
 
     <div id="help-drawer" class="drawer">

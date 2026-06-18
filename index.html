@@ -332,6 +332,65 @@
       .bands-table input[type="number"]:focus {
         outline: 1px solid rgba(100, 150, 255, 0.5);
       }
+      .help-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+        margin-top: 8px;
+      }
+      .help-table thead th {
+        text-align: left;
+        font-weight: 600;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #888;
+        padding: 6px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+      }
+      .help-table thead th:last-child {
+        text-align: right;
+        width: 80px;
+      }
+      .help-table tbody td {
+        padding: 7px 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      }
+      .help-table tbody td:last-child {
+        text-align: right;
+      }
+      .help-table tbody tr:hover td {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .help-table tbody tr.section td {
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #6e9cff;
+        font-weight: 600;
+        padding: 14px 10px 4px;
+        background: transparent;
+        border-bottom: 1px solid rgba(110, 156, 255, 0.2);
+      }
+      .help-table tbody tr.section:hover td {
+        background: transparent;
+      }
+      .help-table tbody tr.section:first-child td {
+        padding-top: 6px;
+      }
+      .help-table kbd {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 3px 9px;
+        font-family: monospace;
+        font-size: 12px;
+        color: #fff;
+        min-width: 26px;
+        display: inline-block;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
@@ -452,33 +511,33 @@
       <div class="modal-content">
       <button class="close" data-close="help-drawer">&times;</button>
       <h3>Keyboard shortcuts</h3>
-      <h4>Sources</h4>
-      <ul>
-        <li><span>Rain on / off</span><kbd>r</kbd></li>
-        <li><span>Wind on / off</span><kbd>w</kbd></li>
-        <li><span>Audio reactive</span><kbd>m</kbd></li>
-      </ul>
-      <h4>Cymatics</h4>
-      <ul>
-        <li><span>Fixed mode test</span><kbd>y</kbd></li>
-        <li><span>Sweep test (m=4, n=2)</span><kbd>t</kbd></li>
-        <li><span>Random mode</span><kbd>p</kbd></li>
-      </ul>
-      <h4>Scene</h4>
-      <ul>
-        <li><span>Clear surface</span><kbd>c</kbd></li>
-        <li><span>Hide / show water</span><kbd>v</kbd></li>
-        <li><span>Distant view</span><kbd>d</kbd></li>
-        <li><span>Even view</span><kbd>e</kbd></li>
-        <li><span>Side view</span><kbd>s</kbd></li>
-      </ul>
-      <h4>UI</h4>
-      <ul>
-        <li><span>Toggle Options drawer</span><kbd>o</kbd></li>
-        <li><span>Toggle Info drawer</span><kbd>i</kbd></li>
-        <li><span>Toggle Help (this)</span><kbd>h</kbd></li>
-        <li><span>Close all drawers</span><kbd>Esc</kbd></li>
-      </ul>
+      <table class="help-table">
+        <thead><tr><th>Action</th><th>Key</th></tr></thead>
+        <tbody>
+          <tr class="section"><td colspan="2">Sources</td></tr>
+          <tr><td>Toggle rain</td><td><kbd>r</kbd></td></tr>
+          <tr><td>Toggle wind</td><td><kbd>w</kbd></td></tr>
+          <tr><td>Toggle audio reactive (asks for mic)</td><td><kbd>m</kbd></td></tr>
+
+          <tr class="section"><td colspan="2">Cymatics</td></tr>
+          <tr><td>Toggle fixed-mode test</td><td><kbd>y</kbd></td></tr>
+          <tr><td>Toggle &omega; sweep</td><td><kbd>t</kbd></td></tr>
+          <tr><td>Roll random mode</td><td><kbd>p</kbd></td></tr>
+
+          <tr class="section"><td colspan="2">Scene</td></tr>
+          <tr><td>Clear surface</td><td><kbd>c</kbd></td></tr>
+          <tr><td>Hide / show water</td><td><kbd>v</kbd></td></tr>
+          <tr><td>Distant view</td><td><kbd>d</kbd></td></tr>
+          <tr><td>Even view</td><td><kbd>e</kbd></td></tr>
+          <tr><td>Side view</td><td><kbd>s</kbd></td></tr>
+
+          <tr class="section"><td colspan="2">UI</td></tr>
+          <tr><td>Toggle Options drawer</td><td><kbd>o</kbd></td></tr>
+          <tr><td>Toggle Info drawer</td><td><kbd>i</kbd></td></tr>
+          <tr><td>Toggle this Help</td><td><kbd>h</kbd></td></tr>
+          <tr><td>Close all drawers</td><td><kbd>Esc</kbd></td></tr>
+        </tbody>
+      </table>
       </div>
     </div>
 

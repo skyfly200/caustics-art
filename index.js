@@ -13,6 +13,14 @@ function genTokenData(projectNum) {
 }
 tokenData = genTokenData(11111);
 
+// Allow ?h=0x... URL override of the token hash. Applied before Random() is
+// constructed so the seeded PRNG uses the override hash.
+const URL_PARAMS = new URLSearchParams(window.location.search);
+if (URL_PARAMS.has('h')) {
+  tokenData.hash = URL_PARAMS.get('h');
+  tokenData.tokenId = '0';
+}
+
 // Static Hash and ID
 // tokenData = {
 //   hash: "0x11ac16678959949c12d5410212301960fc496813cbc3495bf77aeed738579738",
@@ -1363,7 +1371,28 @@ Promise.all([
         case 'd': camera.position.set(0, 0, 6); camera.rotation.x = 0; break;
         case 'e': camera.position.set(0, 0, 2); camera.rotation.x = 0; break;
         case 's': camera.position.set(0, -1.25, 1.66); camera.rotation.x = 35 * Math.PI / 180; break;
-        case 'h': showWater = !showWater; break;
+        case 'v': showWater = !showWater; break;
+        case 'h': document.getElementById('help-drawer').classList.toggle('open'); break;
+        case 'i': {
+          const d = document.getElementById('info-drawer');
+          const opened = !d.classList.contains('open');
+          d.classList.toggle('open');
+          if (opened) renderReadout();
+          break;
+        }
+        case 'o': {
+          const d = document.getElementById('settings-drawer');
+          const opened = !d.classList.contains('open');
+          d.classList.toggle('open');
+          if (opened) syncUIFromState();
+          break;
+        }
+        case 'Escape': {
+          document.getElementById('help-drawer').classList.remove('open');
+          document.getElementById('info-drawer').classList.remove('open');
+          document.getElementById('settings-drawer').classList.remove('open');
+          break;
+        }
         case 'y':
           modeTest = !modeTest;
           console.log(`mode test: ${modeTest} (m=${modeTestM}, n=${modeTestN}, omega=${modeTestOmega}, amp=${modeTestAmp})`);
@@ -1389,6 +1418,10 @@ Promise.all([
       }
     }
     setupUI();
+    applyURLParams();
+    syncUIFromState();
+    const hashInput = document.getElementById('opt-hash');
+    if (hashInput) hashInput.value = tokenData.hash;
     animate();
 });
 
@@ -1406,11 +1439,16 @@ function applyRenderObjects() {
   environment.addTo(scene);
 }
 
-// Re-run the trait dice without a page reload. Generates a new tokenData,
-// recreates the seeded PRNG, re-rolls polygonSides / scale / startDrops /
-// dilation / damping, and pushes the new values into the live simulation.
-function reroll() {
-  tokenData = genTokenData(11111);
+// Re-run the trait dice without a page reload. Generates a new tokenData
+// (or uses the supplied hash to reproduce a specific roll), recreates the
+// seeded PRNG, re-rolls polygonSides / scale / startDrops / dilation /
+// damping, and pushes the new values into the live simulation.
+function reroll(forceHash) {
+  if (forceHash) {
+    tokenData = { hash: forceHash, tokenId: '0' };
+  } else {
+    tokenData = genTokenData(11111);
+  }
   rng = new Random();
   polygonSides = rng.random_int(3, 34);
   scale = rng.random_int(1, 10);
@@ -1459,6 +1497,7 @@ function syncUIFromState() {
     const el = document.getElementById(id);
     if (el) el.textContent = Number(val).toFixed(digits);
   };
+  set('opt-hash', 'value', tokenData.hash);
   set('opt-rain', 'checked', raindrops);
   set('opt-wind', 'checked', wind);
   set('opt-audio', 'checked', soundReactive);
@@ -1519,6 +1558,8 @@ function renderReadout() {
   const row = (label, value) => `<div class="row"><span>${label}</span><span>${value}</span></div>`;
   const sep = `<div class="sep"></div>`;
   let html = '';
+  const shortHash = tokenData.hash.length > 18 ? tokenData.hash.slice(0, 10) + '...' + tokenData.hash.slice(-8) : tokenData.hash;
+  html += row('Token hash', `<span title="${tokenData.hash}">${shortHash}</span>`);
   html += row('Polygon sides', polygonSides);
   html += row('Scale', scale);
   html += row('Start drops', startDrops);
@@ -1533,6 +1574,103 @@ function renderReadout() {
     html += row(`&nbsp;&nbsp;${band.name} (${band.m},${band.n})`, omega.toFixed(4));
   }
   el.innerHTML = html;
+}
+
+// Share/persist schema. Each entry: short URL key, getter (returns current
+// value), setter (applies value from URL string), and the default that the
+// "Reset to defaults" action restores. Booleans encoded as 0/1; numbers
+// stringified. Items omitted from the URL fall back to the current value.
+function shareSchema() {
+  return [
+    ['rain',  () => raindrops,           v => { raindrops = v === '1'; },           true],
+    ['wind',  () => wind,                v => { wind = v === '1'; },                false],
+    ['ar',    () => soundReactive,       v => { soundReactive = v === '1'; },       false],
+    ['mr',    () => mouseReactive,       v => { mouseReactive = v === '1'; },       false],
+    ['rs',    () => randomStart,         v => { randomStart = v === '1'; },         true],
+    ['et',    () => eigenTune,           v => { eigenTune = v === '1'; },           true],
+    ['ro',    () => renderObjects,       v => { renderObjects = v === '1'; applyRenderObjects(); }, false],
+    ['dmp',   () => 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value, v => waterSimulation.setDamping(1.0 - parseFloat(v)), 0.002 * scale],
+    ['ws',    () => waterSimulation._updateMesh.material.uniforms.c.value, v => waterSimulation.setWaveSpeed(parseFloat(v)), 0.25],
+    ['df',    () => waterSimulation._dropMesh.material.uniforms.falloff.value, v => waterSimulation.setDropFalloff(parseFloat(v)), 2.0],
+    ['ri',    () => intensity,           v => { intensity = parseFloat(v); },        0.2],
+    ['wi',    () => windIntensity,       v => { windIntensity = parseFloat(v); },    0.01],
+    ['wst',   () => windStrength,        v => { windStrength = parseFloat(v); },     1.0],
+    ['ag',    () => audioGain,           v => { audioGain = parseFloat(v); },        0.001],
+    ['asm',   () => audioSmoothing,      v => { audioSmoothing = parseFloat(v); },   0.2],
+    ['agt',   () => audioGate,           v => { audioGate = parseFloat(v); },        0.04],
+    ['cf',    () => caustics._waterMaterial.uniforms.causticsFactor.value, v => caustics.setCausticsFactor(parseFloat(v)), 0.5],
+    ['ck',    () => caustics._waterMaterial.uniforms.compressK.value,      v => caustics.setCompressK(parseFloat(v)),       0.1],
+    ['pcf',   () => environment._material.uniforms.pcfBlur.value, v => environment.setPcfBlur(parseFloat(v)), 0.125],
+    ['eta',   () => water.material.uniforms.eta.value, v => { water.setEta(parseFloat(v)); caustics.setEta(parseFloat(v)); }, 0.7504],
+    ['fb',    () => water.material.uniforms.fresnelBias.value, v => water.setFresnelBias(parseFloat(v)), 0.1],
+    ['fs',    () => water.material.uniforms.fresnelScale.value, v => water.setFresnelScale(parseFloat(v)), 1.0],
+    ['fp',    () => water.material.uniforms.fresnelPower.value, v => water.setFresnelPower(parseFloat(v)), 2.0],
+    ['uw',    () => '#' + environment._material.uniforms.underwaterColor.value.getHexString(), v => environment.setUnderwaterColor(v), '#333333'],
+    ['oref',  () => OMEGA_REF,           v => { OMEGA_REF = parseFloat(v); },        0.83],
+    ['oexp',  () => OMEGA_EXP,           v => { OMEGA_EXP = parseFloat(v); },        0.3],
+    ['smin',  () => sweepOmegaMin,       v => { sweepOmegaMin = parseFloat(v); },    0.1],
+    ['smax',  () => sweepOmegaMax,       v => { sweepOmegaMax = parseFloat(v); },    20.0],
+    ['sdur',  () => sweepDuration,       v => { sweepDuration = parseFloat(v); },    30000],
+    ['rmm',   () => randomMaxM,          v => { randomMaxM = parseInt(v); },         8],
+    ['rmn',   () => randomMaxN,          v => { randomMaxN = parseInt(v); },         5],
+  ];
+}
+
+function applyURLParams() {
+  const schema = shareSchema();
+  for (const [key, _, setter] of schema) {
+    if (URL_PARAMS.has(key)) {
+      try { setter(URL_PARAMS.get(key)); } catch (err) { console.warn('URL param', key, err); }
+    }
+  }
+}
+
+function buildShareURL() {
+  const params = new URLSearchParams();
+  params.set('h', tokenData.hash);
+  for (const [key, getter, _, def] of shareSchema()) {
+    const v = getter();
+    const enc = typeof v === 'boolean' ? (v ? '1' : '0') : v;
+    const defEnc = typeof def === 'boolean' ? (def ? '1' : '0') : def;
+    // Omit equal-to-default values to keep URL short
+    if (String(enc) !== String(defEnc)) params.set(key, enc);
+  }
+  return location.origin + location.pathname + '?' + params.toString();
+}
+
+function resetToDefaults() {
+  for (const [_, __, setter, def] of shareSchema()) {
+    try { setter(typeof def === 'boolean' ? (def ? '1' : '0') : String(def)); } catch (err) {}
+  }
+  syncUIFromState();
+}
+
+function showToast(msg, ms = 1600) {
+  const el = document.getElementById('toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), ms);
+}
+
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(
+      () => showToast('Copied to clipboard'),
+      () => showToast('Copy failed - here it is in the console') || console.log(text)
+    );
+  } else {
+    console.log(text);
+    showToast('Copied (see console)');
+  }
+}
+
+function saveScreenshot() {
+  const link = document.createElement('a');
+  link.download = 'caustics-' + Date.now() + '.png';
+  link.href = renderer.domElement.toDataURL('image/png');
+  link.click();
 }
 
 // Wire the floating buttons to drawers/modal. Each toggle is independent so
@@ -1570,6 +1708,27 @@ function setupUI() {
     reroll();
     syncUIFromState();
     renderReadout();
+  });
+  document.getElementById('opt-hash-apply').addEventListener('click', () => {
+    const hashInput = document.getElementById('opt-hash');
+    const h = (hashInput.value || '').trim();
+    if (!/^0x[0-9a-fA-F]+$/.test(h)) {
+      showToast('Hash must be 0x... hex');
+      return;
+    }
+    reroll(h);
+    syncUIFromState();
+    renderReadout();
+    showToast('Hash applied');
+  });
+  document.getElementById('opt-share').addEventListener('click', () => {
+    const url = buildShareURL();
+    copyToClipboard(url);
+  });
+  document.getElementById('opt-screenshot').addEventListener('click', saveScreenshot);
+  document.getElementById('opt-reset').addEventListener('click', () => {
+    resetToDefaults();
+    showToast('Reset to defaults');
   });
 
   // Source toggles

@@ -265,6 +265,36 @@
       .accordion[open] summary::before { transform: rotate(90deg); }
       .accordion[open] summary { color: #ddd; }
       .accordion .accordion-body { padding: 6px 0 10px; }
+      .drawer .hash-input {
+        font-family: monospace;
+        font-size: 11px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #fff;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 4px;
+        padding: 5px 8px;
+        flex: 1;
+        min-width: 0;
+        max-width: 220px;
+      }
+      .toast {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(20, 20, 24, 0.9);
+        color: #fff;
+        padding: 8px 16px;
+        border-radius: 6px;
+        font-family: sans-serif;
+        font-size: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        z-index: 300;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        pointer-events: none;
+      }
+      .toast.show { opacity: 1; }
     </style>
   </head>
   <body>
@@ -273,12 +303,21 @@
     <button id="help-toggle" class="ui-btn" title="Keyboard shortcuts">?</button>
     <button id="info-toggle" class="ui-btn" title="Info">&#x2139;</button>
     <button id="settings-toggle" class="ui-btn" title="Options">&#9881;</button>
+    <div id="toast" class="toast"></div>
 
     <div id="settings-drawer" class="drawer">
       <button class="close" data-close="settings-drawer">&times;</button>
       <h3>Options</h3>
 
-      <button class="action" id="opt-reroll" title="Generate a fresh seeded trait set (polygon sides, scale, dilation, drops, damping) without reloading the page">&#x21bb; Reroll traits</button>
+      <h4>Token</h4>
+      <label title="Current token hash. Paste a different hash and click Apply to reproduce a specific trait roll"><span>Hash</span><input type="text" id="opt-hash" class="hash-input" placeholder="0x..." spellcheck="false"></label>
+      <div class="view-buttons">
+        <button class="action" id="opt-reroll" title="Generate a fresh seeded trait set (polygon sides, scale, dilation, drops, damping) without reloading the page">&#x21bb; Reroll</button>
+        <button class="action" id="opt-hash-apply" title="Apply the hash field above and re-run the trait dice with that seed">Apply hash</button>
+        <button class="action" id="opt-share" title="Copy a URL that reproduces the current hash and option settings">Share URL</button>
+        <button class="action" id="opt-screenshot" title="Save the current canvas to a PNG file">Screenshot</button>
+      </div>
+      <button class="action" id="opt-reset" title="Reset every option in this drawer to its default value (does not change the trait roll)">Reset to defaults</button>
 
       <h4>Sources</h4>
       <label class="toggle" title="Continuous random raindrops that spawn ripples each frame"><span>Rain</span><input type="checkbox" id="opt-rain"></label>
@@ -376,10 +415,17 @@
       <h4>Scene</h4>
       <ul>
         <li><span>Clear surface</span><kbd>c</kbd></li>
-        <li><span>Hide / show water</span><kbd>h</kbd></li>
+        <li><span>Hide / show water</span><kbd>v</kbd></li>
         <li><span>Distant view</span><kbd>d</kbd></li>
         <li><span>Even view</span><kbd>e</kbd></li>
         <li><span>Side view</span><kbd>s</kbd></li>
+      </ul>
+      <h4>UI</h4>
+      <ul>
+        <li><span>Toggle Options drawer</span><kbd>o</kbd></li>
+        <li><span>Toggle Info drawer</span><kbd>i</kbd></li>
+        <li><span>Toggle Help (this)</span><kbd>h</kbd></li>
+        <li><span>Close all drawers</span><kbd>Esc</kbd></li>
       </ul>
       </div>
     </div>

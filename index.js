@@ -159,10 +159,10 @@ let audioBands = [
   { name: 'treble',  loHz: 4000,  hiHz: 12000, m: 8, n: 3, omega: 3.5, smooth: 0 },
 ];
 // Overall amplitude scaling for audio-driven modes
-let audioGain = 0.0003;
+let audioGain = 0.001;
 // Exponential smoothing factor for per-band magnitude (0 = no smoothing,
 // closer to 1 = more smoothing / slower response).
-let audioSmoothing = 0.75;
+let audioSmoothing = 0.2;
 // Gate threshold below which a band is treated as silent
 let audioGate = 0.04;
 

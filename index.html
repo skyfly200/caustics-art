@@ -204,30 +204,30 @@
       <button class="close" data-close="settings-drawer">&times;</button>
       <h3>Options</h3>
 
-      <button class="action" id="opt-reroll">&#x21bb; Reroll traits</button>
+      <button class="action" id="opt-reroll" title="Generate a fresh seeded trait set (polygon sides, scale, dilation, drops, damping) without reloading the page">&#x21bb; Reroll traits</button>
 
       <h4>Sources</h4>
-      <label class="toggle"><span>Rain</span><input type="checkbox" id="opt-rain"></label>
-      <label class="toggle"><span>Wind</span><input type="checkbox" id="opt-wind"></label>
-      <label class="toggle"><span>Audio reactive</span><input type="checkbox" id="opt-audio"></label>
-      <label class="toggle"><span>Mouse interaction</span><input type="checkbox" id="opt-mouse"></label>
+      <label class="toggle" title="Continuous random raindrops that spawn ripples each frame"><span>Rain</span><input type="checkbox" id="opt-rain"></label>
+      <label class="toggle" title="Periodic wind gusts that spawn clusters of small drops with an attack/release envelope"><span>Wind</span><input type="checkbox" id="opt-wind"></label>
+      <label class="toggle" title="Map microphone FFT bands to cymatic modes (asks for mic permission)"><span>Audio reactive</span><input type="checkbox" id="opt-audio"></label>
+      <label class="toggle" title="Drop a ripple wherever the mouse moves over the canvas"><span>Mouse interaction</span><input type="checkbox" id="opt-mouse"></label>
 
       <h4>Surface</h4>
-      <label><span>Damping</span><input type="range" id="opt-damping" min="0" max="0.05" step="0.0005"><span class="value" id="val-damping"></span></label>
+      <label title="How quickly waves lose energy each step. Higher = faster settling, calmer surface"><span>Damping</span><input type="range" id="opt-damping" min="0" max="0.05" step="0.0005"><span class="value" id="val-damping"></span></label>
 
       <h4>Rain</h4>
-      <label><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="1" step="0.01"><span class="value" id="val-intensity"></span></label>
+      <label title="Probability of spawning a raindrop each frame (0..1)"><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="1" step="0.01"><span class="value" id="val-intensity"></span></label>
 
       <h4>Wind</h4>
-      <label><span>Gust rate</span><input type="range" id="opt-wind-intensity" min="0" max="0.05" step="0.001"><span class="value" id="val-wind-intensity"></span></label>
+      <label title="Probability of a new wind gust starting each frame"><span>Gust rate</span><input type="range" id="opt-wind-intensity" min="0" max="0.05" step="0.001"><span class="value" id="val-wind-intensity"></span></label>
 
       <h4>Audio</h4>
-      <label><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.003" step="0.00005"><span class="value" id="val-audio-gain"></span></label>
-      <label><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
-      <label><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
+      <label title="Overall amplitude scale for audio-driven cymatic modes. Higher = stronger response"><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.003" step="0.00005"><span class="value" id="val-audio-gain"></span></label>
+      <label title="Per-band exponential moving average. 0 = snappy/jittery, 1 = frozen/lazy. Layered on top of the analyser node's own FFT smoothing"><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
+      <label title="Silence threshold per band. If a band's smoothed magnitude is below this, it injects no energy"><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
 
       <h4>Cymatics</h4>
-      <label class="toggle"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
+      <label class="toggle" title="Compute each (m,n) mode's natural angular frequency from the circular-drum Bessel formula and drive at that frequency. Off = use the hand-tuned omega per band"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
     </div>
 
     <div id="info-drawer" class="drawer">

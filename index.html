@@ -168,6 +168,14 @@
         border-top: 1px dashed rgba(255, 255, 255, 0.1);
         margin: 4px 0;
       }
+      .drawer .stats-host {
+        display: flex;
+        justify-content: flex-start;
+        margin: 0 0 12px;
+      }
+      .drawer .stats-host > div {
+        position: static !important;
+      }
     </style>
   </head>
   <body>
@@ -179,6 +187,8 @@
     <div id="settings-drawer" class="drawer">
       <button class="close" data-close="settings-drawer">&times;</button>
       <h3>Settings</h3>
+
+      <div id="stats-container" class="stats-host"></div>
 
       <button class="action" id="opt-reroll">&#x21bb; Reroll traits</button>
 

@@ -77,13 +77,14 @@ class Random {
 // fresh traits without a page reload.
 let rng = new Random()
 
-// Display FPS
-/* DEV BEGIN */
-// TODO: remove this after final testing for performance as its using an external dependency
+// FPS panel lives inside the settings drawer (#stats-container) so it
+// doesn't crowd the canvas. Reset stats.js's fixed-corner positioning so
+// it renders inline within the drawer.
 const stats = new Stats()
 stats.showPanel(0)
-document.body.appendChild(stats.domElement)
-/* DEV END */
+stats.domElement.style.position = 'static'
+const statsContainer = document.getElementById('stats-container')
+;(statsContainer || document.body).appendChild(stats.domElement)
 
 // == Config==
 const canvas = document.getElementById('canvas')

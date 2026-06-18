@@ -161,20 +161,29 @@ let gustPosition,gustSize,gustMass
 // Hand-tuned to walk diagonally through (m, n) space and the well-balanced
 // 0.3-5.0 rad/s omega range.
 let audioBands = [
-  { name: 'subBass', loHz: 20,    hiHz: 60,    m: 1, n: 1, omega: 0.4, smooth: 0 },
-  { name: 'bass',    loHz: 60,    hiHz: 250,   m: 2, n: 1, omega: 0.8, smooth: 0 },
-  { name: 'lowMid',  loHz: 250,   hiHz: 500,   m: 3, n: 2, omega: 1.2, smooth: 0 },
-  { name: 'mid',     loHz: 500,   hiHz: 2000,  m: 4, n: 2, omega: 1.8, smooth: 0 },
-  { name: 'highMid', loHz: 2000,  hiHz: 4000,  m: 6, n: 3, omega: 2.5, smooth: 0 },
-  { name: 'treble',  loHz: 4000,  hiHz: 12000, m: 8, n: 3, omega: 3.5, smooth: 0 },
+  { name: 'subBass', loHz: 20,    hiHz: 60,    m: 1, n: 1, omega: 0.4, smooth: 0, gate: 0.04, rollingAvg: 0 },
+  { name: 'bass',    loHz: 60,    hiHz: 250,   m: 2, n: 1, omega: 0.8, smooth: 0, gate: 0.04, rollingAvg: 0 },
+  { name: 'lowMid',  loHz: 250,   hiHz: 500,   m: 3, n: 2, omega: 1.2, smooth: 0, gate: 0.04, rollingAvg: 0 },
+  { name: 'mid',     loHz: 500,   hiHz: 2000,  m: 4, n: 2, omega: 1.8, smooth: 0, gate: 0.04, rollingAvg: 0 },
+  { name: 'highMid', loHz: 2000,  hiHz: 4000,  m: 6, n: 3, omega: 2.5, smooth: 0, gate: 0.04, rollingAvg: 0 },
+  { name: 'treble',  loHz: 4000,  hiHz: 12000, m: 8, n: 3, omega: 3.5, smooth: 0, gate: 0.04, rollingAvg: 0 },
 ];
 // Overall amplitude scaling for audio-driven modes
 let audioGain = 0.001;
 // Exponential smoothing factor for per-band magnitude (0 = no smoothing,
 // closer to 1 = more smoothing / slower response).
 let audioSmoothing = 0.2;
-// Gate threshold below which a band is treated as silent
+// Default per-band gate. The "Apply to all" action in Options pushes this to
+// every band's .gate. Each band's gate is the actual threshold used in the
+// audio handler.
 let audioGate = 0.04;
+// Adaptive gate: when true, the effective gate is max(band.gate, rollingAvg
+// * gateAdaptK). Lets bands with consistently noisy bins set their floor
+// dynamically, so middle bands don't constantly trigger from baseline hum.
+let useAdaptiveGate = false;
+let gateAdaptK = 2.0;
+// Rolling-average EMA factor (per sim step). Closer to 1 = longer window.
+const ROLLING_AVG_ALPHA = 0.99;
 
 // === Resonance model ===
 // Circular-drum eigenfrequencies: bessel_zeros[m][n-1] = alpha_{m,n}, the
@@ -384,6 +393,7 @@ const simUpdateFrag = `
   uniform vec2 delta;
   uniform float damping;
   uniform float c;
+  uniform float stiffness;
 
   varying vec2 coord;
 
@@ -412,7 +422,7 @@ const simUpdateFrag = `
       // speed roughly matches the old 5-point version at the same c.
       float lap = (4.0*(hL + hR + hD + hU) + (hNE + hNW + hSE + hSW) - 20.0*h) / 6.0;
 
-      float h_new = 2.0 * h - h_prev + c * lap;
+      float h_new = 2.0 * h - h_prev + c * lap - stiffness * h;
       h_new *= damping;
 
       // Store surface gradient in .ba so the water/caustics shaders get correct normals
@@ -523,6 +533,7 @@ class WaterSimulation {
         delta: { value: deltaRates },
         damping: { value: attenuate },
         c: { value: 0.25 },
+        stiffness: { value: 0.0 },
         texture: { value: null },
       },
       vertexShader: simVert,
@@ -600,6 +611,10 @@ class WaterSimulation {
 
   setDropFalloff(value) {
     this._dropMesh.material.uniforms.falloff.value = value;
+  }
+
+  setStiffness(value) {
+    this._updateMesh.material.uniforms.stiffness.value = value;
   }
 
   // Replace the simulation domain shape (used by reroll() to change the
@@ -1026,17 +1041,23 @@ function animate() {
   stats.begin();
   // Rain
   if (raindrops) {
-    // intensity variation random walk
+    // intensity variation random walk - clamp to [0, intensity max] so the
+    // wandering envelope never goes negative
     intensityVariationVector += (rng.random_dec() - 0.5) * 0.033 * intensityVariability
-    intensityVariationVector = Math.max(-(intensityVariability) , Math.min(intensityVariability, intensityVariationVector))
-    let intensityTotal = Math.max(Math.min(intensity + intensityVariationVector, 1), 0)
-    //console.log(intensityVariationVector, intensityTotal)
-    if (Math.random() <= intensityTotal) {
+    intensityVariationVector = Math.max(-(intensityVariability), Math.min(intensityVariability, intensityVariationVector))
+    const intensityTotal = Math.max(0, intensity + intensityVariationVector)
+    // Treat intensity as expected drops per frame: floor(N) guaranteed,
+    // plus one more with probability of the fractional part. Lets the slider
+    // go past 1 for storms / heavy rain instead of capping at one drop max.
+    const guaranteed = Math.floor(intensityTotal);
+    const fractional = intensityTotal - guaranteed;
+    const totalDrops = guaranteed + (Math.random() < fractional ? 1 : 0);
+    for (let i = 0; i < totalDrops; i++) {
       let size = rng.random_dec() * 0.05;
-      let mass = rng.random_dec() * 0.025;  // Reduced from 0.05
-      mass = (rng.random_dec() > 0.5) ? mass : mass * -1
-      let posX = randPos ? rng.random_dec() * 2 - 1 : 0;
-      let posY = randPos ? rng.random_dec() * 2 - 1 : 0;
+      let mass = rng.random_dec() * 0.025;
+      mass = (rng.random_dec() > 0.5) ? mass : mass * -1;
+      const posX = randPos ? rng.random_dec() * 2 - 1 : 0;
+      const posY = randPos ? rng.random_dec() * 2 - 1 : 0;
       waterSimulation.addDrop(renderer, posX, posY, size, mass);
     }
   }
@@ -1130,11 +1151,18 @@ function animate() {
         for (let i = loBin; i <= hiBin; i++) sum += fd[i];
         const magnitude = count > 0 ? (sum / count) / 255 : 0;
 
-        // Exponential smoothing for stable mode drive (prevents per-frame jitter)
+        // Per-band exponential smoothing for stable mode drive.
         band.smooth = audioSmoothing * band.smooth + (1 - audioSmoothing) * magnitude;
+        // Long-window rolling average for adaptive gating. Tracks the
+        // baseline level so we can lift the gate above the noise floor.
+        band.rollingAvg = ROLLING_AVG_ALPHA * band.rollingAvg + (1 - ROLLING_AVG_ALPHA) * magnitude;
 
-        // Gate quiet bands so they don't bleed energy when there's no signal
-        if (band.smooth > audioGate) {
+        // Effective gate: per-band floor, optionally lifted by rolling-avg
+        // adaptive ceiling.
+        let effGate = band.gate;
+        if (useAdaptiveGate) effGate = Math.max(effGate, band.rollingAvg * gateAdaptK);
+
+        if (band.smooth > effGate) {
           const omega = eigenTune ? computeEigenOmega(band.m, band.n) : band.omega;
           waterSimulation.addMode(renderer, band.m, band.n, omega, audioGain * band.smooth);
         }
@@ -1260,6 +1288,35 @@ function drawAudioVisIfOpen() {
   ctx.textAlign = 'left';
   ctx.fillText('gate', 2, gateY - 2);
 
+  // Per-band gate ticks (short horizontal segments inside each band's Hz
+  // range) so you can see where each band's threshold sits relative to the
+  // bars and the global gate line.
+  ctx.lineWidth = 1;
+  for (let i = 0; i < audioBands.length; i++) {
+    const band = audioBands[i];
+    let effGate = band.gate;
+    if (useAdaptiveGate) effGate = Math.max(effGate, band.rollingAvg * gateAdaptK);
+    const x0 = fToX(Math.max(band.loHz, fMin));
+    const x1 = fToX(Math.min(band.hiHz, fMax));
+    const yGate = H - effGate * H;
+    ctx.strokeStyle = `hsla(${i * 55}, 90%, 70%, 0.85)`;
+    ctx.beginPath();
+    ctx.moveTo(x0, yGate);
+    ctx.lineTo(x1, yGate);
+    ctx.stroke();
+    // Rolling-avg tick when adaptive is on
+    if (useAdaptiveGate) {
+      const yAvg = H - band.rollingAvg * H;
+      ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(x0, yAvg);
+      ctx.lineTo(x1, yAvg);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+  }
+
   // Per-band smoothed magnitude markers + labels
   ctx.textAlign = 'center';
   for (let i = 0; i < audioBands.length; i++) {
@@ -1267,7 +1324,9 @@ function drawAudioVisIfOpen() {
     const centerHz = Math.sqrt(band.loHz * band.hiHz);
     const x = fToX(centerHz);
     const y = H - band.smooth * H;
-    const isLive = band.smooth > audioGate;
+    let effGate = band.gate;
+    if (useAdaptiveGate) effGate = Math.max(effGate, band.rollingAvg * gateAdaptK);
+    const isLive = band.smooth > effGate;
     const hue = i * 55;
     ctx.fillStyle = isLive ? `hsla(${hue}, 90%, 70%, 1)` : `hsla(${hue}, 40%, 55%, 0.6)`;
     ctx.beginPath();
@@ -1304,7 +1363,9 @@ function drawModeVisIfOpen() {
   // band.smooth, scaled by the gain comp curve, only if above gate.
   let maxAmp = 0;
   const driveLevels = audioBands.map((band, i) => {
-    if (band.smooth <= audioGate) return 0;
+    let effGate = band.gate;
+    if (useAdaptiveGate) effGate = Math.max(effGate, band.rollingAvg * gateAdaptK);
+    if (band.smooth <= effGate) return 0;
     const omega = eigenTune ? computeEigenOmega(band.m, band.n) : band.omega;
     const compFactor = Math.pow(omega / OMEGA_REF, OMEGA_EXP);
     const drive = audioGain * band.smooth * compFactor;
@@ -1540,6 +1601,9 @@ function syncUIFromState() {
   const waveSpeed = waterSimulation._updateMesh.material.uniforms.c.value;
   set('opt-wavespeed', 'value', waveSpeed); fmt('val-wavespeed', waveSpeed, 2);
 
+  const stiff = waterSimulation._updateMesh.material.uniforms.stiffness.value;
+  set('opt-stiffness', 'value', stiff); fmt('val-stiffness', stiff, 3);
+
   const dropFalloff = waterSimulation._dropMesh.material.uniforms.falloff.value;
   set('opt-dropfalloff', 'value', dropFalloff); fmt('val-dropfalloff', dropFalloff, 1);
 
@@ -1550,6 +1614,8 @@ function syncUIFromState() {
   set('opt-audio-gain', 'value', audioGain); fmt('val-audio-gain', audioGain, 5);
   set('opt-audio-smooth', 'value', audioSmoothing); fmt('val-audio-smooth', audioSmoothing, 2);
   set('opt-audio-gate', 'value', audioGate); fmt('val-audio-gate', audioGate, 3);
+  set('opt-adaptive-gate', 'checked', useAdaptiveGate);
+  set('opt-gate-adapt-k', 'value', gateAdaptK); fmt('val-gate-adapt-k', gateAdaptK, 2);
 
   const cf = caustics._waterMaterial.uniforms.causticsFactor.value;
   set('opt-caustics-factor', 'value', cf); fmt('val-caustics-factor', cf, 2);
@@ -1587,7 +1653,7 @@ function renderAudioBandsTable() {
   const container = document.getElementById('audio-bands-table');
   if (!container) return;
   let html = '<table class="bands-table"><thead><tr>';
-  html += '<th>Band</th><th>m</th><th>n</th><th>&omega;</th><th>eig &omega;</th><th>Hz lo</th><th>Hz hi</th>';
+  html += '<th>Band</th><th>m</th><th>n</th><th>&omega;</th><th>eig &omega;</th><th>Hz lo</th><th>Hz hi</th><th>Gate</th>';
   html += '</tr></thead><tbody>';
   audioBands.forEach((band, i) => {
     const eig = computeEigenOmega(band.m, band.n).toFixed(2);
@@ -1599,6 +1665,7 @@ function renderAudioBandsTable() {
       <td>${eig}</td>
       <td><input type="number" min="0" max="20000" step="10" data-band="${i}" data-field="loHz" value="${band.loHz}"></td>
       <td><input type="number" min="0" max="20000" step="10" data-band="${i}" data-field="hiHz" value="${band.hiHz}"></td>
+      <td><input type="number" min="0" max="1" step="0.01" data-band="${i}" data-field="gate" value="${band.gate}"></td>
     </tr>`;
   });
   html += '</tbody></table>';
@@ -1675,6 +1742,7 @@ function shareSchema() {
     ['ro',    () => renderObjects,       v => { renderObjects = v === '1'; applyRenderObjects(); }, false],
     ['dmp',   () => 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value, v => waterSimulation.setDamping(1.0 - parseFloat(v)), 0.002 * scale],
     ['ws',    () => waterSimulation._updateMesh.material.uniforms.c.value, v => waterSimulation.setWaveSpeed(parseFloat(v)), 0.25],
+    ['stf',   () => waterSimulation._updateMesh.material.uniforms.stiffness.value, v => waterSimulation.setStiffness(parseFloat(v)), 0.0],
     ['df',    () => waterSimulation._dropMesh.material.uniforms.falloff.value, v => waterSimulation.setDropFalloff(parseFloat(v)), 2.0],
     ['ri',    () => intensity,           v => { intensity = parseFloat(v); },        0.2],
     ['wi',    () => windIntensity,       v => { windIntensity = parseFloat(v); },    0.01],
@@ -1682,6 +1750,11 @@ function shareSchema() {
     ['ag',    () => audioGain,           v => { audioGain = parseFloat(v); },        0.001],
     ['asm',   () => audioSmoothing,      v => { audioSmoothing = parseFloat(v); },   0.2],
     ['agt',   () => audioGate,           v => { audioGate = parseFloat(v); },        0.04],
+    ['ag2',   () => useAdaptiveGate,     v => { useAdaptiveGate = v === '1'; },      false],
+    ['agk',   () => gateAdaptK,          v => { gateAdaptK = parseFloat(v); },        2.0],
+    ['gts',   () => audioBands.map(b => b.gate).join(','),
+              v => { const a = v.split(',').map(parseFloat); audioBands.forEach((b, i) => { if (!isNaN(a[i])) b.gate = a[i]; }); },
+              '0.04,0.04,0.04,0.04,0.04,0.04'],
     ['cf',    () => caustics._waterMaterial.uniforms.causticsFactor.value, v => caustics.setCausticsFactor(parseFloat(v)), 0.5],
     ['ck',    () => caustics._waterMaterial.uniforms.compressK.value,      v => caustics.setCompressK(parseFloat(v)),       0.1],
     ['pcf',   () => environment._material.uniforms.pcfBlur.value, v => environment.setPcfBlur(parseFloat(v)), 0.125],
@@ -1867,6 +1940,7 @@ function setupUI() {
   // Surface
   bind('opt-damping',         'val-damping',         4, v => { waterSimulation.setDamping(1.0 - v); });
   bind('opt-wavespeed',       'val-wavespeed',       2, v => { waterSimulation.setWaveSpeed(v); });
+  bind('opt-stiffness',       'val-stiffness',       3, v => { waterSimulation.setStiffness(v); });
   bind('opt-dropfalloff',     'val-dropfalloff',     1, v => { waterSimulation.setDropFalloff(v); });
   // Rain / Wind
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
@@ -1876,6 +1950,13 @@ function setupUI() {
   bind('opt-audio-gain',      'val-audio-gain',      5, v => { audioGain = v; });
   bind('opt-audio-smooth',    'val-audio-smooth',    2, v => { audioSmoothing = v; });
   bind('opt-audio-gate',      'val-audio-gate',      3, v => { audioGate = v; });
+  bind('opt-gate-adapt-k',    'val-gate-adapt-k',    2, v => { gateAdaptK = v; });
+  document.getElementById('opt-adaptive-gate').addEventListener('change', e => { useAdaptiveGate = e.target.checked; });
+  document.getElementById('opt-gate-apply-all').addEventListener('click', () => {
+    for (const band of audioBands) band.gate = audioGate;
+    renderAudioBandsTable();
+    showToast('Gate applied to all bands');
+  });
   // Caustics
   bind('opt-caustics-factor', 'val-caustics-factor', 2, v => { caustics.setCausticsFactor(v); });
   bind('opt-compress-k',      'val-compress-k',      3, v => { caustics.setCompressK(v); });

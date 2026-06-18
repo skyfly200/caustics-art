@@ -367,10 +367,11 @@
       <h4>Surface</h4>
       <label title="How quickly waves lose energy each step. Higher = faster settling, calmer surface"><span>Damping</span><input type="range" id="opt-damping" min="0" max="0.05" step="0.0005"><span class="value" id="val-damping"></span></label>
       <label title="Wave equation coefficient c. Higher = faster propagation, more layered ripples. CFL stable up to ~0.5"><span>Wave speed</span><input type="range" id="opt-wavespeed" min="0.05" max="0.45" step="0.01"><span class="value" id="val-wavespeed"></span></label>
+      <label title="Restoring force pulling each point toward zero (Klein-Gordon term). Higher = stiffer/springier surface, waves don't propagate as far. Keep below ~0.2 for stability"><span>Stiffness</span><input type="range" id="opt-stiffness" min="0" max="0.2" step="0.001"><span class="value" id="val-stiffness"></span></label>
       <label title="Initial drop profile exponent: pow(d, falloff). Lower = softer bell, higher = sharper spike"><span>Drop falloff</span><input type="range" id="opt-dropfalloff" min="0.5" max="5" step="0.1"><span class="value" id="val-dropfalloff"></span></label>
 
       <h4>Rain</h4>
-      <label title="Probability of spawning a raindrop each frame (0..1)"><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="1" step="0.01"><span class="value" id="val-intensity"></span></label>
+      <label title="Expected number of raindrops per frame. Values >1 spawn multiple drops per frame (storm)"><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="10" step="0.05"><span class="value" id="val-intensity"></span></label>
 
       <h4>Wind</h4>
       <label title="Probability of a new wind gust starting each frame"><span>Gust rate</span><input type="range" id="opt-wind-intensity" min="0" max="0.05" step="0.001"><span class="value" id="val-wind-intensity"></span></label>
@@ -379,7 +380,10 @@
       <h4>Audio</h4>
       <label title="Overall amplitude scale for audio-driven cymatic modes. Higher = stronger response"><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.003" step="0.00005"><span class="value" id="val-audio-gain"></span></label>
       <label title="Per-band exponential moving average. 0 = snappy/jittery, 1 = frozen/lazy. Layered on top of the analyser node's own FFT smoothing"><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
-      <label title="Silence threshold per band. If a band's smoothed magnitude is below this, it injects no energy"><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
+      <label title="Default gate value. Adjust then click 'Apply to all bands' to set every band's threshold at once"><span>Gate (default)</span><input type="range" id="opt-audio-gate" min="0" max="1" step="0.005"><span class="value" id="val-audio-gate"></span></label>
+      <button class="action" id="opt-gate-apply-all" title="Push the Default gate value above into every band's per-band gate">Apply gate to all bands</button>
+      <label class="toggle" title="Lift each band's gate above its rolling-average noise floor. Effective gate = max(band gate, rolling avg * multiplier)"><span>Adaptive gate</span><input type="checkbox" id="opt-adaptive-gate"></label>
+      <label title="Multiplier of the rolling average. Higher = requires stronger transient to fire"><span>Adaptive K</span><input type="range" id="opt-gate-adapt-k" min="1" max="5" step="0.05"><span class="value" id="val-gate-adapt-k"></span></label>
 
       <h4>Caustics</h4>
       <label title="Overall scale of caustic light intensity. Affects how bright focal points appear before the soft-cap"><span>Intensity</span><input type="range" id="opt-caustics-factor" min="0" max="2" step="0.05"><span class="value" id="val-caustics-factor"></span></label>

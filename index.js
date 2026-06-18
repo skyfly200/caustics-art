@@ -109,6 +109,7 @@ let intensityVariationVector = 0
 let randPos = true
 let wind = false
 let windIntensity = 0.01
+let windStrength = 1.0          // Multiplier on gust droplet size, mass, and count
 let randomStart = true // Default token render state
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
@@ -204,6 +205,12 @@ function computeEigenOmega(m, n) {
 // for the mode (so they hit true resonance). When false, they use the
 // hand-tuned omega values configured per band / random uniform.
 let eigenTune = true;
+// Gain compensation curve parameters (used inside addMode).
+let OMEGA_REF = 0.83;
+let OMEGA_EXP = 0.3;
+// Bounds for the 'p' random-mode roll
+let randomMaxM = 8;
+let randomMaxN = 5;
 // Fixed-mode test (key 'y')
 let modeTest = false
 let modeTestM = 4
@@ -226,8 +233,8 @@ let modeRandomN = 2
 let modeRandomOmega = 1.0
 let modeRandomAmp = 0.001
 function rollRandomMode() {
-  modeRandomM = Math.floor(Math.random() * 8) + 1;  // 1..8 angular lobes
-  modeRandomN = Math.floor(Math.random() * 5) + 1;  // 1..5 radial bands
+  modeRandomM = Math.floor(Math.random() * randomMaxM) + 1;  // 1..randomMaxM
+  modeRandomN = Math.floor(Math.random() * randomMaxN) + 1;  // 1..randomMaxN
   modeRandomOmega = eigenTune
     ? computeEigenOmega(modeRandomM, modeRandomN)
     : Math.exp(Math.log(0.3) + Math.random() * Math.log(5.0/0.3));
@@ -558,12 +565,8 @@ class WaterSimulation {
   // omega is the drive angular frequency in rad/s (sim time, not audio Hz).
   addMode(renderer, m, n, omega, amp) {
     if (!this._modeMesh) return;
-    // Compensate frequency-dependent gain. Iterative tuning: linear overshot,
-    // sqrt still tilted low-weak/high-strong. Natural falloff exponent is
-    // shallower than expected (~0.3). REF=0.83 rad/s puts the unity-gain
-    // point at the 40% mark of the t-sweep.
-    const OMEGA_REF = 0.83;
-    const OMEGA_EXP = 0.3;
+    // Compensate frequency-dependent gain. Module-level OMEGA_REF / OMEGA_EXP
+    // are live-tunable via the Options drawer.
     const effectiveAmp = amp * Math.pow(omega / OMEGA_REF, OMEGA_EXP);
     this._modeMesh.material.uniforms.m.value = m;
     this._modeMesh.material.uniforms.n.value = n;
@@ -1056,11 +1059,11 @@ function animate() {
           x: gustPosition.x + (gustDirection.x * 0.005 * gustAmplitude),
           y: gustPosition.y + (gustDirection.y * 0.005 * gustAmplitude)
         };
-        var dropletSize = gustSize + (Math.random() * 0.01 - 0.005);
-        var dropletMass = gustMass + (Math.random() - 0.5) * 0.001;
-        // Was Math.floor(gustAmplitude * 10): up to 10 drops per frame.
-        // Cut to ~3 max - still feels like a gust, far less energy.
-        var numDroplets = Math.floor(gustAmplitude * 3);
+        // windStrength scales everything linearly so a single slider tames or
+        // amps wind energy without rebalancing each component.
+        var dropletSize = (gustSize + (Math.random() * 0.01 - 0.005)) * windStrength;
+        var dropletMass = (gustMass + (Math.random() - 0.5) * 0.001) * windStrength;
+        var numDroplets = Math.floor(gustAmplitude * 3 * windStrength);
         for (var i = 0; i < numDroplets; i++) {
           waterSimulation.addDrop(
             renderer,
@@ -1159,6 +1162,7 @@ function animate() {
   water.mesh.visible = true;
   renderer.render(scene, camera);
   drawAudioVisIfOpen();
+  drawModeVisIfOpen();
   stats.end();
   window.requestAnimationFrame(animate);
 }
@@ -1253,6 +1257,64 @@ function drawAudioVisIfOpen() {
   }
 }
 
+// Per-frame cymatic resonance mode-levels bar chart. Shows each audio band's
+// current drive amplitude into its (m, n) mode, including the eigenfreq
+// drive (if eigenTune is on) and the gain-comp curve. Only draws when the
+// Info drawer is open.
+let modeVisCtx = null;
+let modeVisCanvas = null;
+function drawModeVisIfOpen() {
+  if (!modeVisCanvas) {
+    modeVisCanvas = document.getElementById('mode-vis');
+    if (modeVisCanvas) modeVisCtx = modeVisCanvas.getContext('2d');
+    if (!modeVisCanvas) return;
+  }
+  const drawer = infoDrawerRef();
+  if (!drawer || !drawer.classList.contains('open')) return;
+  const ctx = modeVisCtx;
+  const W = modeVisCanvas.width;
+  const H = modeVisCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const barW = W / audioBands.length;
+  const gap = 4;
+  // The "drive amplitude" we show is what was actually injected: audioGain *
+  // band.smooth, scaled by the gain comp curve, only if above gate.
+  let maxAmp = 0;
+  const driveLevels = audioBands.map((band, i) => {
+    if (band.smooth <= audioGate) return 0;
+    const omega = eigenTune ? computeEigenOmega(band.m, band.n) : band.omega;
+    const compFactor = Math.pow(omega / OMEGA_REF, OMEGA_EXP);
+    const drive = audioGain * band.smooth * compFactor;
+    if (drive > maxAmp) maxAmp = drive;
+    return drive;
+  });
+  const scale = maxAmp > 0 ? (H - 18) / maxAmp : 0;
+
+  ctx.textAlign = 'center';
+  for (let i = 0; i < audioBands.length; i++) {
+    const band = audioBands[i];
+    const x = i * barW + gap;
+    const w = barW - gap * 2;
+    const isLive = driveLevels[i] > 0;
+    const h = driveLevels[i] * scale;
+    const hue = i * 55;
+
+    // Faint background column showing the full bar slot
+    ctx.fillStyle = `hsla(${hue}, 30%, 30%, 0.25)`;
+    ctx.fillRect(x, 14, w, H - 18);
+
+    // The actual bar
+    ctx.fillStyle = isLive ? `hsla(${hue}, 90%, 60%, 0.95)` : `hsla(${hue}, 30%, 40%, 0.4)`;
+    ctx.fillRect(x, H - 4 - h, w, h);
+
+    // Mode label (m,n) on top
+    ctx.fillStyle = isLive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+    ctx.font = '9px monospace';
+    ctx.fillText(`(${band.m},${band.n})`, x + w / 2, 10);
+  }
+}
+
 function onMouseMove(event) {
   if (mouseReactive) {
     const rect = canvas.getBoundingClientRect();
@@ -1275,19 +1337,19 @@ Promise.all([
     sharkLoaded
   ]).then(() => {
     
-    // TODO: create a 3d plane relief to project caustic patterns on using normal maps
-    const envGeometries = renderObjects ? [rock1, rock2, shark, plant, new THREE.PlaneBufferGeometry(100, 100, 1, 1)] : [new THREE.PlaneBufferGeometry(100, 100, 1, 1)];
-    environmentMap.setGeometries(envGeometries);
-    environment.setGeometries(envGeometries);
-    environment.addTo(scene);
+    applyRenderObjects();
     scene.add(water.mesh);
     caustics.setDeltaEnvTexture(1. / environmentMap.size);
     canvas.addEventListener('mousemove', { handleEvent: onMouseMove });
     document.onkeyup = function(e) {
+      // Ignore key shortcuts while a form input is focused (sliders, hex input)
+      const tag = e.target && e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      let touched = true;
       switch(e.key) {
         case 'm': if (!audio.audioLoaded) audio.startAudio(); soundReactive = !soundReactive; break;
-        case 'r': raindrops = !raindrops; console.log("rain: ", raindrops); break;
-        case 'w': wind = !wind; console.log("wind: ", wind); break;
+        case 'r': raindrops = !raindrops; break;
+        case 'w': wind = !wind; break;
         case 'c':
           waterSimulation.resetSimulation(renderer);
           modeTest = false;
@@ -1316,7 +1378,10 @@ Promise.all([
             console.log("sweep cancelled");
           }
           break;
+        default: touched = false;
       }
+      // Keep UI mirrored if a key changed any state
+      if (touched) syncUIFromState();
     };
     if(randomStart) {
       for (var i=0; i<startDrops; i++) {
@@ -1326,6 +1391,20 @@ Promise.all([
     setupUI();
     animate();
 });
+
+// Apply current renderObjects flag: toggle whether the OBJ assets are
+// included in the caustic environment alongside the floor. Removes any
+// previously-added environment meshes from the scene before swapping the
+// geometry list in.
+function applyRenderObjects() {
+  const envGeometries = renderObjects
+    ? [rock1, rock2, shark, plant, floorGeometry]
+    : [floorGeometry];
+  environmentMap.setGeometries(envGeometries);
+  environment.removeFrom(scene);
+  environment.setGeometries(envGeometries);
+  environment.addTo(scene);
+}
 
 // Re-run the trait dice without a page reload. Generates a new tokenData,
 // recreates the seeded PRNG, re-rolls polygonSides / scale / startDrops /
@@ -1369,119 +1448,163 @@ function reroll() {
   }
 }
 
-// Wire the floating settings & help buttons to the drawer panels in index.html.
-// Settings controls bidirectionally mirror the runtime state vars; drawers
-// re-sync from current values whenever they're opened so that keyboard
-// toggles stay reflected in the UI.
+// Sync the Options drawer's inputs from current global state. Module-scoped
+// so key-handlers can call it to keep the UI mirrored after keyboard toggles.
+function syncUIFromState() {
+  const set = (id, prop, val) => {
+    const el = document.getElementById(id);
+    if (el) el[prop] = val;
+  };
+  const fmt = (id, val, digits) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = Number(val).toFixed(digits);
+  };
+  set('opt-rain', 'checked', raindrops);
+  set('opt-wind', 'checked', wind);
+  set('opt-audio', 'checked', soundReactive);
+  set('opt-mouse', 'checked', mouseReactive);
+  set('opt-random-start', 'checked', randomStart);
+  set('opt-eigen-tune', 'checked', eigenTune);
+  set('opt-render-objects', 'checked', renderObjects);
+
+  const dampingAmount = 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value;
+  set('opt-damping', 'value', dampingAmount); fmt('val-damping', dampingAmount, 4);
+
+  const waveSpeed = waterSimulation._updateMesh.material.uniforms.c.value;
+  set('opt-wavespeed', 'value', waveSpeed); fmt('val-wavespeed', waveSpeed, 2);
+
+  const dropFalloff = waterSimulation._dropMesh.material.uniforms.falloff.value;
+  set('opt-dropfalloff', 'value', dropFalloff); fmt('val-dropfalloff', dropFalloff, 1);
+
+  set('opt-intensity', 'value', intensity); fmt('val-intensity', intensity, 2);
+  set('opt-wind-intensity', 'value', windIntensity); fmt('val-wind-intensity', windIntensity, 3);
+  set('opt-wind-strength', 'value', windStrength); fmt('val-wind-strength', windStrength, 2);
+
+  set('opt-audio-gain', 'value', audioGain); fmt('val-audio-gain', audioGain, 5);
+  set('opt-audio-smooth', 'value', audioSmoothing); fmt('val-audio-smooth', audioSmoothing, 2);
+  set('opt-audio-gate', 'value', audioGate); fmt('val-audio-gate', audioGate, 3);
+
+  const cf = caustics._waterMaterial.uniforms.causticsFactor.value;
+  set('opt-caustics-factor', 'value', cf); fmt('val-caustics-factor', cf, 2);
+  const ck = caustics._waterMaterial.uniforms.compressK.value;
+  set('opt-compress-k', 'value', ck); fmt('val-compress-k', ck, 3);
+  const pcf = environment._material.uniforms.pcfBlur.value;
+  set('opt-pcf-blur', 'value', pcf); fmt('val-pcf-blur', pcf, 3);
+
+  const eta = water.material.uniforms.eta.value;
+  set('opt-eta', 'value', eta); fmt('val-eta', eta, 3);
+  const fb = water.material.uniforms.fresnelBias.value;
+  set('opt-fresnel-bias', 'value', fb); fmt('val-fresnel-bias', fb, 2);
+  const fs = water.material.uniforms.fresnelScale.value;
+  set('opt-fresnel-scale', 'value', fs); fmt('val-fresnel-scale', fs, 2);
+  const fp = water.material.uniforms.fresnelPower.value;
+  set('opt-fresnel-power', 'value', fp); fmt('val-fresnel-power', fp, 1);
+
+  const uw = environment._material.uniforms.underwaterColor.value;
+  set('opt-underwater-color', 'value', '#' + uw.getHexString());
+
+  set('opt-omega-ref', 'value', OMEGA_REF); fmt('val-omega-ref', OMEGA_REF, 2);
+  set('opt-omega-exp', 'value', OMEGA_EXP); fmt('val-omega-exp', OMEGA_EXP, 2);
+  set('opt-sweep-min', 'value', sweepOmegaMin); fmt('val-sweep-min', sweepOmegaMin, 2);
+  set('opt-sweep-max', 'value', sweepOmegaMax); fmt('val-sweep-max', sweepOmegaMax, 1);
+  set('opt-sweep-dur', 'value', sweepDuration / 1000); fmt('val-sweep-dur', sweepDuration / 1000, 0);
+  set('opt-rand-max-m', 'value', randomMaxM); fmt('val-rand-max-m', randomMaxM, 0);
+  set('opt-rand-max-n', 'value', randomMaxN); fmt('val-rand-max-n', randomMaxN, 0);
+}
+
+// Read-only display of derived values: traits, deltas, computed eigenfreqs
+function renderReadout() {
+  const el = document.getElementById('computed-readout');
+  if (!el) return;
+  const row = (label, value) => `<div class="row"><span>${label}</span><span>${value}</span></div>`;
+  const sep = `<div class="sep"></div>`;
+  let html = '';
+  html += row('Polygon sides', polygonSides);
+  html += row('Scale', scale);
+  html += row('Start drops', startDrops);
+  html += row('Time dilation', `[${dilation[0].toFixed(3)}, ${dilation[1].toFixed(3)}]`);
+  html += row('dAmt', dAmt);
+  html += row('Delta', `[${deltaRates[0].toExponential(2)}, ${deltaRates[1].toExponential(2)}]`);
+  html += row('Damping uniform', waterSimulation._updateMesh.material.uniforms.damping.value.toFixed(4));
+  html += sep;
+  html += '<div class="row"><span>Eigenfreqs (rad/s)</span><span></span></div>';
+  for (const band of audioBands) {
+    const omega = computeEigenOmega(band.m, band.n);
+    html += row(`&nbsp;&nbsp;${band.name} (${band.m},${band.n})`, omega.toFixed(4));
+  }
+  el.innerHTML = html;
+}
+
+// Wire the floating buttons to drawers/modal. Each toggle is independent so
+// the user can have Options and Info open simultaneously (one on each edge).
+// Help is rendered as a centered modal instead of a drawer.
 function setupUI() {
   const settingsBtn = document.getElementById('settings-toggle');
   const infoBtn = document.getElementById('info-toggle');
   const helpBtn = document.getElementById('help-toggle');
   const settingsDrawer = document.getElementById('settings-drawer');
   const infoDrawer = document.getElementById('info-drawer');
-  const helpDrawer = document.getElementById('help-drawer');
+  const helpModal = document.getElementById('help-drawer');
 
-  function closeAll() {
-    settingsDrawer.classList.remove('open');
-    infoDrawer.classList.remove('open');
-    helpDrawer.classList.remove('open');
-  }
+  const toggle = (el, onOpen) => () => {
+    const open = el.classList.toggle('open');
+    if (open && onOpen) onOpen();
+  };
+  settingsBtn.addEventListener('click', toggle(settingsDrawer, syncUIFromState));
+  infoBtn.addEventListener('click', toggle(infoDrawer, renderReadout));
+  helpBtn.addEventListener('click', toggle(helpModal));
 
-  // Sync the inputs from the current global state
-  function syncFromState() {
-    const set = (id, prop, val) => {
-      const el = document.getElementById(id);
-      if (el) el[prop] = val;
-    };
-    const fmt = (id, val, digits) => {
-      const el = document.getElementById(id);
-      if (el) el.textContent = Number(val).toFixed(digits);
-    };
-    set('opt-rain', 'checked', raindrops);
-    set('opt-wind', 'checked', wind);
-    set('opt-audio', 'checked', soundReactive);
-    set('opt-mouse', 'checked', mouseReactive);
-    set('opt-random-start', 'checked', randomStart);
-    // Slider shows the damping amount (1 - uniform). Higher slider = faster settling.
-    const dampingAmount = 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value;
-    set('opt-damping', 'value', dampingAmount);
-    fmt('val-damping', dampingAmount, 4);
-    set('opt-intensity', 'value', intensity);
-    fmt('val-intensity', intensity, 2);
-    set('opt-wind-intensity', 'value', windIntensity);
-    fmt('val-wind-intensity', windIntensity, 3);
-    set('opt-audio-gain', 'value', audioGain);
-    fmt('val-audio-gain', audioGain, 5);
-    set('opt-audio-smooth', 'value', audioSmoothing);
-    fmt('val-audio-smooth', audioSmoothing, 2);
-    set('opt-audio-gate', 'value', audioGate);
-    fmt('val-audio-gate', audioGate, 3);
-    set('opt-eigen-tune', 'checked', eigenTune);
-  }
-
-  // Read-only display of derived values: traits, deltas, computed eigenfreqs
-  function renderReadout() {
-    const el = document.getElementById('computed-readout');
-    if (!el) return;
-    const row = (label, value) => `<div class="row"><span>${label}</span><span>${value}</span></div>`;
-    const sep = `<div class="sep"></div>`;
-    let html = '';
-    html += row('Polygon sides', polygonSides);
-    html += row('Scale', scale);
-    html += row('Start drops', startDrops);
-    html += row('Time dilation', `[${dilation[0].toFixed(3)}, ${dilation[1].toFixed(3)}]`);
-    html += row('dAmt', dAmt);
-    html += row('Delta', `[${deltaRates[0].toExponential(2)}, ${deltaRates[1].toExponential(2)}]`);
-    html += row('Damping uniform', waterSimulation._updateMesh.material.uniforms.damping.value.toFixed(4));
-    html += sep;
-    html += '<div class="row"><span>Eigenfreqs (rad/s)</span><span></span></div>';
-    for (const band of audioBands) {
-      const omega = computeEigenOmega(band.m, band.n);
-      html += row(`&nbsp;&nbsp;${band.name} (${band.m},${band.n})`, omega.toFixed(4));
-    }
-    el.innerHTML = html;
-  }
-
-  settingsBtn.addEventListener('click', () => {
-    const isOpen = settingsDrawer.classList.contains('open');
-    closeAll();
-    if (!isOpen) { syncFromState(); settingsDrawer.classList.add('open'); }
+  document.querySelectorAll('[data-close]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.close);
+      if (target) target.classList.remove('open');
+    });
   });
-  infoBtn.addEventListener('click', () => {
-    const isOpen = infoDrawer.classList.contains('open');
-    closeAll();
-    if (!isOpen) { renderReadout(); infoDrawer.classList.add('open'); }
+  // Click outside modal content closes it
+  helpModal.addEventListener('click', e => {
+    if (e.target === helpModal) helpModal.classList.remove('open');
   });
-  helpBtn.addEventListener('click', () => {
-    const isOpen = helpDrawer.classList.contains('open');
-    closeAll();
-    if (!isOpen) helpDrawer.classList.add('open');
-  });
-  document.querySelectorAll('.drawer .close').forEach(btn => {
-    btn.addEventListener('click', closeAll);
+
+  // Top-level Options actions
+  document.getElementById('opt-reroll').addEventListener('click', () => {
+    reroll();
+    syncUIFromState();
+    renderReadout();
   });
 
   // Source toggles
-  document.getElementById('opt-rain').addEventListener('change', e => {
-    raindrops = e.target.checked;
-  });
-  document.getElementById('opt-wind').addEventListener('change', e => {
-    wind = e.target.checked;
-  });
+  document.getElementById('opt-rain').addEventListener('change', e => { raindrops = e.target.checked; });
+  document.getElementById('opt-wind').addEventListener('change', e => { wind = e.target.checked; });
   document.getElementById('opt-audio').addEventListener('change', e => {
     if (e.target.checked && !audio.audioLoaded) audio.startAudio();
     soundReactive = e.target.checked;
   });
-  document.getElementById('opt-mouse').addEventListener('change', e => {
-    mouseReactive = e.target.checked;
-  });
-  document.getElementById('opt-random-start').addEventListener('change', e => {
-    randomStart = e.target.checked;
-  });
+  document.getElementById('opt-mouse').addEventListener('change', e => { mouseReactive = e.target.checked; });
+  document.getElementById('opt-random-start').addEventListener('change', e => { randomStart = e.target.checked; });
   document.getElementById('opt-eigen-tune').addEventListener('change', e => {
     eigenTune = e.target.checked;
     renderReadout();
   });
+  document.getElementById('opt-render-objects').addEventListener('change', e => {
+    renderObjects = e.target.checked;
+    applyRenderObjects();
+  });
+  document.getElementById('opt-underwater-color').addEventListener('input', e => {
+    environment.setUnderwaterColor(e.target.value);
+  });
+
+  // View buttons mirror keyboard view shortcuts
+  const setView = (cb) => () => { cb(); };
+  document.getElementById('view-distant').addEventListener('click', setView(() => {
+    camera.position.set(0, 0, 6); camera.rotation.x = 0;
+  }));
+  document.getElementById('view-even').addEventListener('click', setView(() => {
+    camera.position.set(0, 0, 2); camera.rotation.x = 0;
+  }));
+  document.getElementById('view-side').addEventListener('click', setView(() => {
+    camera.position.set(0, -1.25, 1.66); camera.rotation.x = 35 * Math.PI / 180;
+  }));
+  document.getElementById('view-hide-water').addEventListener('click', () => { showWater = !showWater; });
 
   // Sliders with live value display
   const bind = (id, valId, digits, setter) => {
@@ -1493,17 +1616,35 @@ function setupUI() {
       if (val) val.textContent = v.toFixed(digits);
     });
   };
-  document.getElementById('opt-reroll').addEventListener('click', () => {
-    reroll();
-    syncFromState();
-    renderReadout();
-  });
+  // Surface
   bind('opt-damping',         'val-damping',         4, v => { waterSimulation.setDamping(1.0 - v); });
+  bind('opt-wavespeed',       'val-wavespeed',       2, v => { waterSimulation.setWaveSpeed(v); });
+  bind('opt-dropfalloff',     'val-dropfalloff',     1, v => { waterSimulation.setDropFalloff(v); });
+  // Rain / Wind
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
   bind('opt-wind-intensity',  'val-wind-intensity',  3, v => { windIntensity = v; });
+  bind('opt-wind-strength',   'val-wind-strength',   2, v => { windStrength = v; });
+  // Audio
   bind('opt-audio-gain',      'val-audio-gain',      5, v => { audioGain = v; });
   bind('opt-audio-smooth',    'val-audio-smooth',    2, v => { audioSmoothing = v; });
   bind('opt-audio-gate',      'val-audio-gate',      3, v => { audioGate = v; });
+  // Caustics
+  bind('opt-caustics-factor', 'val-caustics-factor', 2, v => { caustics.setCausticsFactor(v); });
+  bind('opt-compress-k',      'val-compress-k',      3, v => { caustics.setCompressK(v); });
+  bind('opt-pcf-blur',        'val-pcf-blur',        3, v => { environment.setPcfBlur(v); });
+  // Water material
+  bind('opt-eta',             'val-eta',             3, v => { water.setEta(v); caustics.setEta(v); });
+  bind('opt-fresnel-bias',    'val-fresnel-bias',    2, v => { water.setFresnelBias(v); });
+  bind('opt-fresnel-scale',   'val-fresnel-scale',   2, v => { water.setFresnelScale(v); });
+  bind('opt-fresnel-power',   'val-fresnel-power',   1, v => { water.setFresnelPower(v); });
+  // Cymatics knobs
+  bind('opt-omega-ref',       'val-omega-ref',       2, v => { OMEGA_REF = v; });
+  bind('opt-omega-exp',       'val-omega-exp',       2, v => { OMEGA_EXP = v; });
+  bind('opt-sweep-min',       'val-sweep-min',       2, v => { sweepOmegaMin = v; });
+  bind('opt-sweep-max',       'val-sweep-max',       1, v => { sweepOmegaMax = v; });
+  bind('opt-sweep-dur',       'val-sweep-dur',       0, v => { sweepDuration = v * 1000; });
+  bind('opt-rand-max-m',      'val-rand-max-m',      0, v => { randomMaxM = v; });
+  bind('opt-rand-max-n',      'val-rand-max-n',      0, v => { randomMaxN = v; });
 }
 
 

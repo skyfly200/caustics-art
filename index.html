@@ -34,22 +34,60 @@
       .drawer {
         position: fixed;
         top: 0;
-        right: -360px;
         width: 320px;
         height: 100%;
         background: rgba(15, 15, 18, 0.92);
         color: #eee;
         padding: 60px 20px 20px;
         overflow-y: auto;
-        transition: right 0.25s ease;
+        transition: transform 0.25s ease;
         z-index: 99;
         box-sizing: border-box;
         font-family: sans-serif;
         font-size: 13px;
         backdrop-filter: blur(6px);
+      }
+      #info-drawer {
+        left: 0;
+        transform: translateX(-100%);
+        border-right: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      #info-drawer.open { transform: translateX(0); }
+      #settings-drawer {
+        right: 0;
+        transform: translateX(100%);
         border-left: 1px solid rgba(255, 255, 255, 0.1);
       }
-      .drawer.open { right: 0; }
+      #settings-drawer.open { transform: translateX(0); }
+      /* Help is rendered as a centered modal (see .modal styles below) */
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.55);
+        backdrop-filter: blur(2px);
+        z-index: 200;
+        display: none;
+        align-items: center;
+        justify-content: center;
+      }
+      .modal.open { display: flex; }
+      .modal-content {
+        position: relative;
+        background: rgba(20, 20, 24, 0.96);
+        color: #eee;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 10px;
+        padding: 40px 24px 24px;
+        max-width: 380px;
+        width: 92%;
+        max-height: 80vh;
+        overflow-y: auto;
+        font-family: sans-serif;
+        font-size: 13px;
+      }
       .drawer h3 {
         margin: 0 0 12px;
         font-size: 16px;
@@ -191,6 +229,42 @@
         color: #888;
         margin-top: 4px;
       }
+      .drawer .view-buttons {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 6px;
+        margin-bottom: 10px;
+      }
+      .drawer .view-buttons .action {
+        margin: 0;
+        padding: 6px 8px;
+        font-size: 12px;
+      }
+      .accordion {
+        margin-top: 6px;
+      }
+      .accordion summary {
+        cursor: pointer;
+        list-style: none;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: #aaa;
+        padding: 6px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .accordion summary::-webkit-details-marker { display: none; }
+      .accordion summary::before {
+        content: '\\25B8';
+        display: inline-block;
+        width: 14px;
+        transition: transform 0.15s ease;
+        color: #666;
+      }
+      .accordion[open] summary::before { transform: rotate(90deg); }
+      .accordion[open] summary { color: #ddd; }
+      .accordion .accordion-body { padding: 6px 0 10px; }
     </style>
   </head>
   <body>
@@ -215,20 +289,53 @@
 
       <h4>Surface</h4>
       <label title="How quickly waves lose energy each step. Higher = faster settling, calmer surface"><span>Damping</span><input type="range" id="opt-damping" min="0" max="0.05" step="0.0005"><span class="value" id="val-damping"></span></label>
+      <label title="Wave equation coefficient c. Higher = faster propagation, more layered ripples. CFL stable up to ~0.5"><span>Wave speed</span><input type="range" id="opt-wavespeed" min="0.05" max="0.45" step="0.01"><span class="value" id="val-wavespeed"></span></label>
+      <label title="Initial drop profile exponent: pow(d, falloff). Lower = softer bell, higher = sharper spike"><span>Drop falloff</span><input type="range" id="opt-dropfalloff" min="0.5" max="5" step="0.1"><span class="value" id="val-dropfalloff"></span></label>
 
       <h4>Rain</h4>
       <label title="Probability of spawning a raindrop each frame (0..1)"><span>Intensity</span><input type="range" id="opt-intensity" min="0" max="1" step="0.01"><span class="value" id="val-intensity"></span></label>
 
       <h4>Wind</h4>
       <label title="Probability of a new wind gust starting each frame"><span>Gust rate</span><input type="range" id="opt-wind-intensity" min="0" max="0.05" step="0.001"><span class="value" id="val-wind-intensity"></span></label>
+      <label title="Multiplier on per-gust droplet size, mass, and count. 1 = default; 0 = silent gusts; 3 = storm"><span>Wind strength</span><input type="range" id="opt-wind-strength" min="0" max="3" step="0.05"><span class="value" id="val-wind-strength"></span></label>
 
       <h4>Audio</h4>
       <label title="Overall amplitude scale for audio-driven cymatic modes. Higher = stronger response"><span>Gain</span><input type="range" id="opt-audio-gain" min="0" max="0.003" step="0.00005"><span class="value" id="val-audio-gain"></span></label>
       <label title="Per-band exponential moving average. 0 = snappy/jittery, 1 = frozen/lazy. Layered on top of the analyser node's own FFT smoothing"><span>Smoothing</span><input type="range" id="opt-audio-smooth" min="0" max="0.98" step="0.01"><span class="value" id="val-audio-smooth"></span></label>
       <label title="Silence threshold per band. If a band's smoothed magnitude is below this, it injects no energy"><span>Gate</span><input type="range" id="opt-audio-gate" min="0" max="0.3" step="0.005"><span class="value" id="val-audio-gate"></span></label>
 
+      <h4>Caustics</h4>
+      <label title="Overall scale of caustic light intensity. Affects how bright focal points appear before the soft-cap"><span>Intensity</span><input type="range" id="opt-caustics-factor" min="0" max="2" step="0.05"><span class="value" id="val-caustics-factor"></span></label>
+      <label title="Soft-cap K. Higher = more aggressive compression (asymptote = 1/K). Prevents bright plateaus at focal points"><span>Soft-cap K</span><input type="range" id="opt-compress-k" min="0" max="0.5" step="0.005"><span class="value" id="val-compress-k"></span></label>
+      <label title="Width of the two-pass Gaussian blur on caustics. 0 = no blur (crispy/noisy), higher = softer"><span>PCF blur</span><input type="range" id="opt-pcf-blur" min="0" max="0.5" step="0.005"><span class="value" id="val-pcf-blur"></span></label>
+
+      <h4>Water material</h4>
+      <label title="Air/water refractive index ratio. 0.7504 is physically real; lower = more bending, higher = flatter"><span>Refraction (eta)</span><input type="range" id="opt-eta" min="0.5" max="0.95" step="0.005"><span class="value" id="val-eta"></span></label>
+      <label title="Fresnel reflection floor at zero incidence angle"><span>Fresnel bias</span><input type="range" id="opt-fresnel-bias" min="0" max="1" step="0.01"><span class="value" id="val-fresnel-bias"></span></label>
+      <label title="Fresnel reflection scale. Higher = more reflective at grazing angles"><span>Fresnel scale</span><input type="range" id="opt-fresnel-scale" min="0" max="3" step="0.05"><span class="value" id="val-fresnel-scale"></span></label>
+      <label title="Fresnel falloff exponent. Higher = sharper transition between refractive (looking down) and reflective (grazing)"><span>Fresnel power</span><input type="range" id="opt-fresnel-power" min="0.5" max="6" step="0.1"><span class="value" id="val-fresnel-power"></span></label>
+
+      <h4>Visuals</h4>
+      <label class="toggle" title="Include shark, rocks, and plant as caustic targets in addition to the floor"><span>Render objects</span><input type="checkbox" id="opt-render-objects"></label>
+      <label title="Tint of the underwater floor before lighting & caustics are applied"><span>Underwater color</span><input type="color" id="opt-underwater-color"></label>
+
+      <h4>Views</h4>
+      <div class="view-buttons">
+        <button class="action" id="view-distant" title="Distant overhead view (key d)">Distant</button>
+        <button class="action" id="view-even" title="Default overhead view (key e)">Even</button>
+        <button class="action" id="view-side" title="Angled side view (key s)">Side</button>
+        <button class="action" id="view-hide-water" title="Toggle water visibility (key h)">Toggle water</button>
+      </div>
+
       <h4>Cymatics</h4>
       <label class="toggle" title="Compute each (m,n) mode's natural angular frequency from the circular-drum Bessel formula and drive at that frequency. Off = use the hand-tuned omega per band"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
+      <label title="Reference omega for the audio amplitude gain compensation curve. Unity-gain point of the curve"><span>Gain REF</span><input type="range" id="opt-omega-ref" min="0.1" max="5" step="0.01"><span class="value" id="val-omega-ref"></span></label>
+      <label title="Exponent of the gain compensation curve. 0 = no comp, 1 = full linear, ~0.3 default"><span>Gain EXP</span><input type="range" id="opt-omega-exp" min="0" max="1" step="0.01"><span class="value" id="val-omega-exp"></span></label>
+      <label title="Min angular frequency of the t-sweep test"><span>Sweep min</span><input type="range" id="opt-sweep-min" min="0.01" max="2" step="0.01"><span class="value" id="val-sweep-min"></span></label>
+      <label title="Max angular frequency of the t-sweep test"><span>Sweep max</span><input type="range" id="opt-sweep-max" min="1" max="40" step="0.5"><span class="value" id="val-sweep-max"></span></label>
+      <label title="Duration of the t-sweep test in seconds"><span>Sweep duration (s)</span><input type="range" id="opt-sweep-dur" min="5" max="120" step="1"><span class="value" id="val-sweep-dur"></span></label>
+      <label title="Max m (angular lobes) for the p random-mode key"><span>Random max m</span><input type="range" id="opt-rand-max-m" min="1" max="12" step="1"><span class="value" id="val-rand-max-m"></span></label>
+      <label title="Max n (radial bands) for the p random-mode key"><span>Random max n</span><input type="range" id="opt-rand-max-n" min="1" max="8" step="1"><span class="value" id="val-rand-max-n"></span></label>
     </div>
 
     <div id="info-drawer" class="drawer">
@@ -242,11 +349,16 @@
       <canvas id="audio-vis" class="audio-vis" width="280" height="120"></canvas>
       <div class="vis-hint" id="audio-vis-hint">Press <kbd>m</kbd> to enable audio</div>
 
+      <h4>Resonance mode levels</h4>
+      <canvas id="mode-vis" class="audio-vis" width="280" height="100"></canvas>
+      <div class="vis-hint">Each bar shows the per-band drive amplitude into its cymatic (m, n) mode</div>
+
       <h4>FPS</h4>
       <div id="stats-container" class="stats-host"></div>
     </div>
 
-    <div id="help-drawer" class="drawer">
+    <div id="help-drawer" class="modal">
+      <div class="modal-content">
       <button class="close" data-close="help-drawer">&times;</button>
       <h3>Keyboard shortcuts</h3>
       <h4>Sources</h4>
@@ -269,6 +381,7 @@
         <li><span>Even view</span><kbd>e</kbd></li>
         <li><span>Side view</span><kbd>s</kbd></li>
       </ul>
+      </div>
     </div>
 
     <script type="text/javascript" src="index.js"></script>

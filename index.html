@@ -177,6 +177,20 @@
       .drawer .stats-host > div {
         position: static !important;
       }
+      .drawer .audio-vis {
+        display: block;
+        width: 100%;
+        max-width: 280px;
+        height: auto;
+        background: rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 4px;
+      }
+      .drawer .vis-hint {
+        font-size: 11px;
+        color: #888;
+        margin-top: 4px;
+      }
     </style>
   </head>
   <body>
@@ -222,6 +236,10 @@
 
       <h4>Computed traits</h4>
       <div class="readout" id="computed-readout"></div>
+
+      <h4>Audio reactivity</h4>
+      <canvas id="audio-vis" class="audio-vis" width="280" height="120"></canvas>
+      <div class="vis-hint" id="audio-vis-hint">Press <kbd>m</kbd> to enable audio</div>
 
       <h4>FPS</h4>
       <div id="stats-container" class="stats-host"></div>

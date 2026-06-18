@@ -1147,8 +1147,99 @@ function animate() {
   renderer.clear();
   water.mesh.visible = true;
   renderer.render(scene, camera);
+  drawAudioVisIfOpen();
   stats.end();
   window.requestAnimationFrame(animate);
+}
+
+// Per-frame audio visualization (FFT bars on log-x, gate line, per-band
+// smoothed magnitude markers). Only draws when the Info drawer is open.
+let audioVisCtx = null;
+let audioVisCanvas = null;
+let audioVisHint = null;
+const infoDrawerRef = () => document.getElementById('info-drawer');
+function drawAudioVisIfOpen() {
+  if (!audioVisCanvas) {
+    audioVisCanvas = document.getElementById('audio-vis');
+    audioVisHint = document.getElementById('audio-vis-hint');
+    if (audioVisCanvas) audioVisCtx = audioVisCanvas.getContext('2d');
+    if (!audioVisCanvas) return;
+  }
+  const drawer = infoDrawerRef();
+  if (!drawer || !drawer.classList.contains('open')) return;
+  if (!audio.audioLoaded) {
+    if (audioVisHint) audioVisHint.textContent = 'Press m to enable audio';
+    audioVisCtx.clearRect(0, 0, audioVisCanvas.width, audioVisCanvas.height);
+    return;
+  }
+  if (audioVisHint) audioVisHint.textContent = '';
+
+  const fd = audio.frequencyData;
+  audio.analyser.getByteFrequencyData(fd);
+
+  const ctx = audioVisCtx;
+  const W = audioVisCanvas.width;
+  const H = audioVisCanvas.height;
+  ctx.clearRect(0, 0, W, H);
+
+  const nyquist = audio.analyser.context.sampleRate * 0.5;
+  const binWidth = nyquist / fd.length;
+  const fMin = 20, fMax = 12000;
+  const logMin = Math.log(fMin), logMax = Math.log(fMax);
+  const fToX = f => W * (Math.log(Math.max(f, fMin)) - logMin) / (logMax - logMin);
+
+  // Band tint background
+  for (let i = 0; i < audioBands.length; i++) {
+    const band = audioBands[i];
+    const x0 = fToX(Math.max(band.loHz, fMin));
+    const x1 = fToX(Math.min(band.hiHz, fMax));
+    const hue = i * 55;
+    ctx.fillStyle = `hsla(${hue}, 70%, 50%, 0.10)`;
+    ctx.fillRect(x0, 0, x1 - x0, H);
+  }
+
+  // FFT magnitude bars
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  for (let i = 1; i < fd.length; i++) {
+    const f0 = i * binWidth;
+    if (f0 > fMax) break;
+    if (f0 < fMin) continue;
+    const x = fToX(f0);
+    const xNext = fToX(Math.min((i + 1) * binWidth, fMax));
+    const h = (fd[i] / 255) * H;
+    ctx.fillRect(x, H - h, Math.max(1, xNext - x), h);
+  }
+
+  // Gate level horizontal line
+  const gateY = H - audioGate * H;
+  ctx.strokeStyle = 'rgba(255, 90, 90, 0.85)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, gateY);
+  ctx.lineTo(W, gateY);
+  ctx.stroke();
+  ctx.fillStyle = 'rgba(255, 90, 90, 0.85)';
+  ctx.font = '9px monospace';
+  ctx.textAlign = 'left';
+  ctx.fillText('gate', 2, gateY - 2);
+
+  // Per-band smoothed magnitude markers + labels
+  ctx.textAlign = 'center';
+  for (let i = 0; i < audioBands.length; i++) {
+    const band = audioBands[i];
+    const centerHz = Math.sqrt(band.loHz * band.hiHz);
+    const x = fToX(centerHz);
+    const y = H - band.smooth * H;
+    const isLive = band.smooth > audioGate;
+    const hue = i * 55;
+    ctx.fillStyle = isLive ? `hsla(${hue}, 90%, 70%, 1)` : `hsla(${hue}, 40%, 55%, 0.6)`;
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = isLive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.4)';
+    ctx.font = '9px monospace';
+    ctx.fillText(band.name.replace('subBass', 'sub'), x, H - 2);
+  }
 }
 
 function onMouseMove(event) {

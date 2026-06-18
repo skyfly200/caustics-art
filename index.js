@@ -521,16 +521,25 @@ class WaterSimulation {
   }
   
   resetSimulation(renderer) {
-    const resetMaterial = new THREE.RawShaderMaterial({
-      fragmentShader: resetFrag,
-      vertexShader: simVert
-    });
-
-    const resetMesh = new THREE.Mesh(this._geometry, resetMaterial);
+    // Clear via GL framebuffer clear (not a polygon-bounded shader pass)
+    // so every pixel in both ping-pong targets goes to zero. Previously
+    // we rendered a reset shader using the polygon geometry, which left
+    // pixels outside the polygon untouched - a problem after reroll
+    // changes polygonSides, since the old-shape wave data persisted in
+    // the new shape's "outside" region and bled back in through the
+    // laplacian's neighbor sampling. Also only one target was cleared,
+    // so stale data returned on the next ping-pong swap.
     const oldTarget = renderer.getRenderTarget();
-    renderer.setRenderTarget(this.target);
-    renderer.render(resetMesh, this._camera);
+    const oldClearColor = renderer.getClearColor(new THREE.Color());
+    const oldClearAlpha = renderer.getClearAlpha();
+    renderer.setClearColor(black, 0);
+    renderer.setRenderTarget(this._targetA);
+    renderer.clear();
+    renderer.setRenderTarget(this._targetB);
+    renderer.clear();
     renderer.setRenderTarget(oldTarget);
+    renderer.setClearColor(oldClearColor, oldClearAlpha);
+    this.target = this._targetA;
   }
 
   // Add a drop of water at the (x, y) coordinate (in the range [-1, 1])

@@ -73,8 +73,9 @@ class Random {
   }
 }
 
-// Create a Random object for prng
-const rng = new Random()
+// Create a Random object for prng. Reassigned by reroll() to give the user
+// fresh traits without a page reload.
+let rng = new Random()
 
 // Display FPS
 /* DEV BEGIN */
@@ -531,6 +532,22 @@ class WaterSimulation {
   // Live setter for the damping coefficient (0..1; lower = more damping).
   setDamping(value) {
     this._updateMesh.material.uniforms.damping.value = value;
+  }
+
+  // Replace the simulation domain shape (used by reroll() to change the
+  // polygonSides trait). All three sim passes share the same geometry, so
+  // dispose the old and reassign on each mesh.
+  rerollGeometry(sides) {
+    this._geometry.dispose();
+    this._geometry = new THREE.CircleGeometry(0.9, sides);
+    this._modeMesh.geometry = this._geometry;
+    this._dropMesh.geometry = this._geometry;
+    this._updateMesh.geometry = this._geometry;
+  }
+
+  // Live setter for the laplacian neighbor-sampling distance.
+  setDelta(deltaArray) {
+    this._updateMesh.material.uniforms.delta.value = deltaArray;
   }
 
   _render(renderer, mesh) {
@@ -1157,6 +1174,48 @@ Promise.all([
     animate();
 });
 
+// Re-run the trait dice without a page reload. Generates a new tokenData,
+// recreates the seeded PRNG, re-rolls polygonSides / scale / startDrops /
+// dilation / damping, and pushes the new values into the live simulation.
+function reroll() {
+  tokenData = genTokenData(11111);
+  rng = new Random();
+  polygonSides = rng.random_int(3, 34);
+  scale = rng.random_int(1, 10);
+  startDrops = rng.random_int(10, 55) + scale;
+  dAmt = rng.skewedRandom(1000);
+  dilation = rng.random_dec() < .1
+    ? (rng.random_dec() < .5 ? [dAmt, 1] : [1, dAmt])
+    : [1, 1];
+  deltaRates = dilation.map(d => 1 / (1024 * d));
+  attenuate = 1.0 - (0.002 * scale);
+  console.log("Reroll: sides=" + polygonSides + ", scale=" + scale +
+              ", drops=" + startDrops + ", dilation=" + JSON.stringify(dilation) +
+              ", damping=" + attenuate.toFixed(4));
+
+  waterSimulation.rerollGeometry(polygonSides);
+  waterSimulation.setDelta(deltaRates);
+  waterSimulation.setDamping(attenuate);
+  waterSimulation.resetSimulation(renderer);
+
+  // Stop any active cymatic driver so the fresh surface stays clean
+  modeTest = false;
+  modeSweep = false;
+  modeRandom = false;
+
+  if (randomStart) {
+    for (let i = 0; i < startDrops; i++) {
+      waterSimulation.addDrop(
+        renderer,
+        rng.random_dec() * 2 - 1,
+        rng.random_dec() * 2 - 1,
+        rng.random_dec() * 0.05,
+        rng.random_dec() * 0.025 * (i & 1 || -1)
+      );
+    }
+  }
+}
+
 // Wire the floating settings & help buttons to the drawer panels in index.html.
 // Settings controls bidirectionally mirror the runtime state vars; drawers
 // re-sync from current values whenever they're opened so that keyboard
@@ -1241,6 +1300,10 @@ function setupUI() {
       if (val) val.textContent = v.toFixed(digits);
     });
   };
+  document.getElementById('opt-reroll').addEventListener('click', () => {
+    reroll();
+    syncFromState();
+  });
   bind('opt-damping',         'val-damping',         4, v => { waterSimulation.setDamping(1.0 - v); });
   bind('opt-intensity',       'val-intensity',       2, v => { intensity = v; });
   bind('opt-wind-intensity',  'val-wind-intensity',  3, v => { windIntensity = v; });

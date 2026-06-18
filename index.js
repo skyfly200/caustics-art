@@ -411,15 +411,12 @@ const simDropFrag = `
     uniform vec2 center;
     uniform float radius;
     uniform float strength;
+    uniform float falloff;
     varying vec2 coord;
     void main() {
-      /* Get vertex info */
       vec4 info = texture2D(texture, coord);
-      /* Add the drop to the height */
       float drop = max(0.0, 1.0 - length(center * 0.5 + 0.5 - coord) / radius);
-      // Quadratic falloff: a touch sharper than the original cos bell so
-      // wavefronts stay crisp, but milder than the cubic which over-sharpened.
-      drop = drop * drop;
+      drop = pow(drop, falloff);
       info.r += drop * strength;
       gl_FragColor = info;
     }
@@ -498,6 +495,7 @@ class WaterSimulation {
         center: { value: [0, 0] },
         radius: { value: 0 },
         strength: { value: 0 },
+        falloff: { value: 2.0 },
         texture: { value: null },
       },
       vertexShader: simVert,
@@ -584,6 +582,14 @@ class WaterSimulation {
     this._updateMesh.material.uniforms.damping.value = value;
   }
 
+  setWaveSpeed(value) {
+    this._updateMesh.material.uniforms.c.value = value;
+  }
+
+  setDropFalloff(value) {
+    this._dropMesh.material.uniforms.falloff.value = value;
+  }
+
   // Replace the simulation domain shape (used by reroll() to change the
   // polygonSides trait). All three sim passes share the same geometry, so
   // dispose the old and reassign on each mesh.
@@ -633,15 +639,14 @@ const waterFrag = `
 `;
 const waterVert = `
     uniform sampler2D water;
+    uniform float eta;
+    uniform float fresnelBias;
+    uniform float fresnelScale;
+    uniform float fresnelPower;
     varying vec2 refractedPosition[3];
     varying vec3 reflected;
     varying float reflectionFactor;
     const float refractionFactor = 1.;
-    const float fresnelBias = 0.1;
-    const float fresnelPower = 2.;
-    const float fresnelScale = 1.;
-    // Air refractive index / Water refractive index
-    const float eta = 0.7504;
     void main() {
       vec4 info = texture2D(water, position.xy * 0.5 + 0.5);
       // The water position is the vertex position on which we apply the height-map
@@ -671,6 +676,10 @@ class Water {
         water: { value: null },
         envMap: { value: null },
         skybox: { value: null },
+        eta: { value: 0.7504 },
+        fresnelBias: { value: 0.1 },
+        fresnelScale: { value: 1.0 },
+        fresnelPower: { value: 2.0 },
       },
       vertexShader: waterVert,
       fragmentShader: waterFrag,
@@ -690,6 +699,11 @@ class Water {
   setEnvMapTexture(envMap) {
     this.material.uniforms['envMap'].value = envMap;
   }
+
+  setEta(value) { this.material.uniforms.eta.value = value; }
+  setFresnelBias(value) { this.material.uniforms.fresnelBias.value = value; }
+  setFresnelScale(value) { this.material.uniforms.fresnelScale.value = value; }
+  setFresnelPower(value) { this.material.uniforms.fresnelPower.value = value; }
 
 }
 
@@ -745,8 +759,8 @@ class EnvironmentMap {
 }
 
 const causticFrag = `
-    // TODO Make it a uniform
-    const float causticsFactor = 0.5;
+    uniform float causticsFactor;
+    uniform float compressK;
     varying vec3 oldPosition;
     varying vec3 newPosition;
     varying float waterDepth;
@@ -754,27 +768,15 @@ const causticFrag = `
     void main() {
       float causticsIntensity = 0.;
       if (depth >= waterDepth) {
-        // Use the full Jacobian magnitude (cross product of partial derivatives)
-        // instead of |dFdx| * |dFdy|. The latter is the axis-aligned bounding
-        // rectangle and biases caustic intensity into a cross/diamond pattern
-        // even when the underlying water surface is perfectly isotropic.
         float oldArea = length(cross(dFdx(oldPosition), dFdy(oldPosition)));
         float newArea = length(cross(dFdx(newPosition), dFdy(newPosition)));
         float ratio;
-        // Prevent dividing by zero (debug NVidia drivers)
         if (newArea == 0.) {
-          // Arbitrary large value
           ratio = 2.0e+20;
         } else {
           ratio = oldArea / newArea;
         }
         causticsIntensity = causticsFactor * ratio;
-        // Soft-cap at the source. ratio blows up when newArea -> 0 at focal
-        // points, generating values like 50+ that all collapse to ~1.0 under
-        // any final tonemap and read as flat plateaus. Compressing here
-        // bounds each contribution at ~10 while preserving low-intensity
-        // gradient. Asymptote = 1/compressK = 10.
-        const float compressK = 0.1;
         causticsIntensity = causticsIntensity / (1.0 + compressK * causticsIntensity);
       }
       gl_FragColor = vec4(causticsIntensity, 0., 0., depth);
@@ -785,15 +787,11 @@ const causticVert = `
     uniform sampler2D water;
     uniform sampler2D env;
     uniform float deltaEnvTexture;
+    uniform float eta;
     varying vec3 oldPosition;
     varying vec3 newPosition;
     varying float waterDepth;
     varying float depth;
-    // Air refractive index / Water refractive index
-    const float eta = 0.7504;
-    // TODO Make this a uniform
-    // This is the maximum iterations when looking for the ray intersection with the environment,
-    // if after this number of attempts we did not find the intersection, the result will be wrong.
     const int MAX_ITERATIONS = 50;
     void main() {
       vec4 waterInfo = texture2D(water, position.xy * 0.5 + 0.5);
@@ -845,6 +843,9 @@ class Caustics {
         env: { value: null },
         water: { value: null },
         deltaEnvTexture: { value: null },
+        eta: { value: 0.7504 },
+        causticsFactor: { value: 0.5 },
+        compressK: { value: 0.1 },
       },
       vertexShader: causticVert,
       fragmentShader: causticFrag,
@@ -871,6 +872,10 @@ class Caustics {
   setDeltaEnvTexture(deltaEnvTexture) {
     this._waterMaterial.uniforms['deltaEnvTexture'].value = deltaEnvTexture;
   }
+
+  setEta(value) { this._waterMaterial.uniforms.eta.value = value; }
+  setCausticsFactor(value) { this._waterMaterial.uniforms.causticsFactor.value = value; }
+  setCompressK(value) { this._waterMaterial.uniforms.compressK.value = value; }
 
   setTextures(waterTexture, envTexture) {
     this._waterMaterial.uniforms['env'].value = envTexture;
@@ -909,10 +914,11 @@ const envVert = `
 `;
 const envFrag = `
   uniform sampler2D caustics;
+  uniform vec3 underwaterColor;
+  uniform float pcfBlur;
   varying float lightIntensity;
   varying vec3 lightPosition;
   const float bias = 0.001;
-  const vec3 underwaterColor = vec3(0.2, 0.2, 0.2);
   const vec2 resolution = vec2(1024.);
   float blur(sampler2D image, vec2 uv, vec2 resolution, vec2 direction) {
     float intensity = 0.;
@@ -926,22 +932,16 @@ const envFrag = `
     return intensity;
   }
   void main() {
-    // Set the frag color
     float computedLightIntensity = 0.5;
     computedLightIntensity += 0.2 * lightIntensity;
-    // Retrieve caustics depth information
     float causticsDepth = texture2D(caustics, lightPosition.xy).w;
     if (causticsDepth > lightPosition.z - bias) {
-      // Percentage Close Filtering
       float causticsIntensity = 0.5 * (
-        blur(caustics, lightPosition.xy, resolution, vec2(0., 0.125)) +
-        blur(caustics, lightPosition.xy, resolution, vec2(0.125, 0.))
+        blur(caustics, lightPosition.xy, resolution, vec2(0., pcfBlur)) +
+        blur(caustics, lightPosition.xy, resolution, vec2(pcfBlur, 0.))
       );
-      computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);;
+      computedLightIntensity += causticsIntensity * smoothstep(0., 1., lightIntensity);
     }
-    // Reinhard tonemap on the final color compresses caustic peaks smoothly
-    // instead of clipping at 1.0, which previously produced hard plateaus
-    // along the brightness gradients of focused ripples.
     vec3 color = underwaterColor * computedLightIntensity;
     color = color / (1.0 + color);
     gl_FragColor = vec4(color, 1.);
@@ -956,11 +956,17 @@ class Environment {
         light: { value: light.position },
         caustics: { value: null },
         lightProjectionMatrix: { value: lightCamera.projectionMatrix },
-        lightViewMatrix: { value: lightCamera.matrixWorldInverse  }
+        lightViewMatrix: { value: lightCamera.matrixWorldInverse  },
+        underwaterColor: { value: new THREE.Color(0.2, 0.2, 0.2) },
+        pcfBlur: { value: 0.125 },
       },
       vertexShader: envVert,
       fragmentShader: envFrag,
     });
+  }
+
+  removeFrom(scene) {
+    for (let mesh of this._meshes) scene.remove(mesh);
   }
 
   setGeometries(geometries) {
@@ -971,6 +977,11 @@ class Environment {
   updateCaustics(causticsTexture) {
     this._material.uniforms['caustics'].value = causticsTexture;
   }
+
+  setUnderwaterColor(color) {
+    this._material.uniforms.underwaterColor.value.set(color);
+  }
+  setPcfBlur(value) { this._material.uniforms.pcfBlur.value = value; }
 
   addTo(scene) {
     for (let mesh of this._meshes) scene.add(mesh);

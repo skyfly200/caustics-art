@@ -29,7 +29,8 @@
       }
       .ui-btn:hover { background: rgba(0, 0, 0, 0.75); }
       #settings-toggle { right: 12px; }
-      #help-toggle { right: 62px; }
+      #info-toggle { right: 62px; }
+      #help-toggle { right: 112px; }
       .drawer {
         position: fixed;
         top: 0;
@@ -182,11 +183,12 @@
     <canvas id="canvas" style=""></canvas>
 
     <button id="help-toggle" class="ui-btn" title="Keyboard shortcuts">?</button>
-    <button id="settings-toggle" class="ui-btn" title="Settings">&#9881;</button>
+    <button id="info-toggle" class="ui-btn" title="Info">&#x2139;</button>
+    <button id="settings-toggle" class="ui-btn" title="Options">&#9881;</button>
 
     <div id="settings-drawer" class="drawer">
       <button class="close" data-close="settings-drawer">&times;</button>
-      <h3>Settings</h3>
+      <h3>Options</h3>
 
       <button class="action" id="opt-reroll">&#x21bb; Reroll traits</button>
 
@@ -212,6 +214,11 @@
 
       <h4>Cymatics</h4>
       <label class="toggle"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
+    </div>
+
+    <div id="info-drawer" class="drawer">
+      <button class="close" data-close="info-drawer">&times;</button>
+      <h3>Info</h3>
 
       <h4>Computed traits</h4>
       <div class="readout" id="computed-readout"></div>

@@ -1273,12 +1273,15 @@ function reroll() {
 // toggles stay reflected in the UI.
 function setupUI() {
   const settingsBtn = document.getElementById('settings-toggle');
+  const infoBtn = document.getElementById('info-toggle');
   const helpBtn = document.getElementById('help-toggle');
   const settingsDrawer = document.getElementById('settings-drawer');
+  const infoDrawer = document.getElementById('info-drawer');
   const helpDrawer = document.getElementById('help-drawer');
 
   function closeAll() {
     settingsDrawer.classList.remove('open');
+    infoDrawer.classList.remove('open');
     helpDrawer.classList.remove('open');
   }
 
@@ -1311,7 +1314,6 @@ function setupUI() {
     set('opt-audio-gate', 'value', audioGate);
     fmt('val-audio-gate', audioGate, 3);
     set('opt-eigen-tune', 'checked', eigenTune);
-    renderReadout();
   }
 
   // Read-only display of derived values: traits, deltas, computed eigenfreqs
@@ -1341,6 +1343,11 @@ function setupUI() {
     const isOpen = settingsDrawer.classList.contains('open');
     closeAll();
     if (!isOpen) { syncFromState(); settingsDrawer.classList.add('open'); }
+  });
+  infoBtn.addEventListener('click', () => {
+    const isOpen = infoDrawer.classList.contains('open');
+    closeAll();
+    if (!isOpen) { renderReadout(); infoDrawer.classList.add('open'); }
   });
   helpBtn.addEventListener('click', () => {
     const isOpen = helpDrawer.classList.contains('open');

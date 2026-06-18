@@ -1390,6 +1390,7 @@ function setupUI() {
     set('opt-wind', 'checked', wind);
     set('opt-audio', 'checked', soundReactive);
     set('opt-mouse', 'checked', mouseReactive);
+    set('opt-random-start', 'checked', randomStart);
     // Slider shows the damping amount (1 - uniform). Higher slider = faster settling.
     const dampingAmount = 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value;
     set('opt-damping', 'value', dampingAmount);
@@ -1462,6 +1463,9 @@ function setupUI() {
   });
   document.getElementById('opt-mouse').addEventListener('change', e => {
     mouseReactive = e.target.checked;
+  });
+  document.getElementById('opt-random-start').addEventListener('change', e => {
+    randomStart = e.target.checked;
   });
   document.getElementById('opt-eigen-tune').addEventListener('change', e => {
     eigenTune = e.target.checked;

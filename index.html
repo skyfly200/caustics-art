@@ -295,6 +295,43 @@
         pointer-events: none;
       }
       .toast.show { opacity: 1; }
+      .drawer h5.subheader {
+        margin: 14px 0 4px;
+        font-size: 11px;
+        font-weight: 600;
+        color: #999;
+      }
+      .bands-table {
+        width: 100%;
+        font-size: 11px;
+        font-family: monospace;
+        border-collapse: collapse;
+        margin-bottom: 4px;
+      }
+      .bands-table th, .bands-table td {
+        padding: 3px 4px;
+        text-align: left;
+      }
+      .bands-table th {
+        color: #aaa;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-weight: 500;
+      }
+      .bands-table td:first-child { color: #ccc; }
+      .bands-table input[type="number"] {
+        width: 100%;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        color: #fff;
+        padding: 2px 4px;
+        font-family: monospace;
+        font-size: 11px;
+        border-radius: 3px;
+        box-sizing: border-box;
+      }
+      .bands-table input[type="number"]:focus {
+        outline: 1px solid rgba(100, 150, 255, 0.5);
+      }
     </style>
   </head>
   <body>
@@ -325,6 +362,7 @@
       <label class="toggle" title="Map microphone FFT bands to cymatic modes (asks for mic permission)"><span>Audio reactive</span><input type="checkbox" id="opt-audio"></label>
       <label class="toggle" title="Drop a ripple wherever the mouse moves over the canvas"><span>Mouse interaction</span><input type="checkbox" id="opt-mouse"></label>
       <label class="toggle" title="Seed the surface with a batch of random drops on page load and after Reroll. Affects the next reroll / next page load"><span>Random start drops</span><input type="checkbox" id="opt-random-start"></label>
+      <label class="toggle" title="Fire a random cymatic standing wave at startup and after Reroll. Press c to clear or p to roll a new one"><span>Random start mode</span><input type="checkbox" id="opt-random-start-modes"></label>
 
       <h4>Surface</h4>
       <label title="How quickly waves lose energy each step. Higher = faster settling, calmer surface"><span>Damping</span><input type="range" id="opt-damping" min="0" max="0.05" step="0.0005"><span class="value" id="val-damping"></span></label>
@@ -368,6 +406,16 @@
 
       <h4>Cymatics</h4>
       <label class="toggle" title="Compute each (m,n) mode's natural angular frequency from the circular-drum Bessel formula and drive at that frequency. Off = use the hand-tuned omega per band"><span>Auto-tune to eigenfreqs</span><input type="checkbox" id="opt-eigen-tune"></label>
+
+      <h5 class="subheader">Audio band mapping</h5>
+      <div id="audio-bands-table"></div>
+      <div class="vis-hint">m = angular lobes, n = radial bands, &omega; = drive (rad/s, ignored when auto-tune is on). Edit live.</div>
+
+      <h5 class="subheader">Fixed mode test (key <kbd>y</kbd>)</h5>
+      <label title="Angular lobes for the fixed-mode test"><span>m</span><input type="range" id="opt-test-m" min="1" max="12" step="1"><span class="value" id="val-test-m"></span></label>
+      <label title="Radial bands for the fixed-mode test"><span>n</span><input type="range" id="opt-test-n" min="1" max="8" step="1"><span class="value" id="val-test-n"></span></label>
+      <label title="Drive angular frequency (rad/s) for the fixed-mode test"><span>&omega;</span><input type="range" id="opt-test-omega" min="0.05" max="10" step="0.05"><span class="value" id="val-test-omega"></span></label>
+      <label title="Amplitude for the fixed-mode test"><span>Amp</span><input type="range" id="opt-test-amp" min="0" max="0.01" step="0.0001"><span class="value" id="val-test-amp"></span></label>
       <label title="Reference omega for the audio amplitude gain compensation curve. Unity-gain point of the curve"><span>Gain REF</span><input type="range" id="opt-omega-ref" min="0.1" max="5" step="0.01"><span class="value" id="val-omega-ref"></span></label>
       <label title="Exponent of the gain compensation curve. 0 = no comp, 1 = full linear, ~0.3 default"><span>Gain EXP</span><input type="range" id="opt-omega-exp" min="0" max="1" step="0.01"><span class="value" id="val-omega-exp"></span></label>
       <label title="Min angular frequency of the t-sweep test"><span>Sweep min</span><input type="range" id="opt-sweep-min" min="0.01" max="2" step="0.01"><span class="value" id="val-sweep-min"></span></label>

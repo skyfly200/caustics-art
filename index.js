@@ -119,6 +119,7 @@ let wind = false
 let windIntensity = 0.01
 let windStrength = 1.0          // Multiplier on gust droplet size, mass, and count
 let randomStart = true // Default token render state
+let randomStartModes = true // On init / reroll, also fire a random cymatic mode
 let polygonSides = rng.random_int(3,34) // ~ Trait
 let scale = rng.random_int(1,10) // ~ Trait
 let startDrops = rng.random_int(10,55) + scale // ~ Trait
@@ -1171,8 +1172,21 @@ function animate() {
   renderer.render(scene, camera);
   drawAudioVisIfOpen();
   drawModeVisIfOpen();
+  refreshReadoutIfOpen();
   stats.end();
   window.requestAnimationFrame(animate);
+}
+
+// Periodic refresh of the Info readout (active drivers, sweep progress)
+// while the Info drawer is open. Throttled to ~500ms so it stays cheap.
+let _lastReadoutMs = 0;
+function refreshReadoutIfOpen() {
+  const drawer = infoDrawerRef();
+  if (!drawer || !drawer.classList.contains('open')) return;
+  const now = performance.now();
+  if (now - _lastReadoutMs < 500) return;
+  _lastReadoutMs = now;
+  renderReadout();
 }
 
 // Per-frame audio visualization (FFT bars on log-x, gate line, per-band
@@ -1417,6 +1431,10 @@ Promise.all([
         waterSimulation.addDrop(renderer, rng.random_dec()*2-1, rng.random_dec()*2-1, rng.random_dec()*0.05, rng.random_dec()*0.025*(i&1||-1));
       }
     }
+    if (randomStartModes) {
+      rollRandomMode();
+      modeRandom = true;
+    }
     setupUI();
     applyURLParams();
     syncUIFromState();
@@ -1484,6 +1502,10 @@ function reroll(forceHash) {
       );
     }
   }
+  if (randomStartModes) {
+    rollRandomMode();
+    modeRandom = true;
+  }
 }
 
 // Sync the Options drawer's inputs from current global state. Module-scoped
@@ -1503,7 +1525,13 @@ function syncUIFromState() {
   set('opt-audio', 'checked', soundReactive);
   set('opt-mouse', 'checked', mouseReactive);
   set('opt-random-start', 'checked', randomStart);
+  set('opt-random-start-modes', 'checked', randomStartModes);
   set('opt-eigen-tune', 'checked', eigenTune);
+  set('opt-test-m', 'value', modeTestM); fmt('val-test-m', modeTestM, 0);
+  set('opt-test-n', 'value', modeTestN); fmt('val-test-n', modeTestN, 0);
+  set('opt-test-omega', 'value', modeTestOmega); fmt('val-test-omega', modeTestOmega, 2);
+  set('opt-test-amp', 'value', modeTestAmp); fmt('val-test-amp', modeTestAmp, 4);
+  renderAudioBandsTable();
   set('opt-render-objects', 'checked', renderObjects);
 
   const dampingAmount = 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value;
@@ -1551,6 +1579,44 @@ function syncUIFromState() {
   set('opt-rand-max-n', 'value', randomMaxN); fmt('val-rand-max-n', randomMaxN, 0);
 }
 
+// Render the editable per-band audio mapping table inside the Options drawer.
+// Each row: name, m, n, omega, Hz lo, Hz hi - all editable as you type.
+// Eigenfreq column shows the current computed eigenomega so you can compare
+// against the hand-tuned omega even when auto-tune is on.
+function renderAudioBandsTable() {
+  const container = document.getElementById('audio-bands-table');
+  if (!container) return;
+  let html = '<table class="bands-table"><thead><tr>';
+  html += '<th>Band</th><th>m</th><th>n</th><th>&omega;</th><th>eig &omega;</th><th>Hz lo</th><th>Hz hi</th>';
+  html += '</tr></thead><tbody>';
+  audioBands.forEach((band, i) => {
+    const eig = computeEigenOmega(band.m, band.n).toFixed(2);
+    html += `<tr>
+      <td>${band.name}</td>
+      <td><input type="number" min="0" max="14" step="1" data-band="${i}" data-field="m" value="${band.m}"></td>
+      <td><input type="number" min="1" max="8" step="1" data-band="${i}" data-field="n" value="${band.n}"></td>
+      <td><input type="number" min="0.01" max="20" step="0.01" data-band="${i}" data-field="omega" value="${band.omega}"></td>
+      <td>${eig}</td>
+      <td><input type="number" min="0" max="20000" step="10" data-band="${i}" data-field="loHz" value="${band.loHz}"></td>
+      <td><input type="number" min="0" max="20000" step="10" data-band="${i}" data-field="hiHz" value="${band.hiHz}"></td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  container.innerHTML = html;
+  container.querySelectorAll('input[type="number"]').forEach(input => {
+    input.addEventListener('input', e => {
+      const idx = parseInt(e.target.dataset.band);
+      const field = e.target.dataset.field;
+      const v = parseFloat(e.target.value);
+      if (!isNaN(v)) {
+        audioBands[idx][field] = (field === 'm' || field === 'n') ? Math.round(v) : v;
+        // Refresh eigenfreq column (lightweight; just re-render whole table)
+        if (field === 'm' || field === 'n') renderAudioBandsTable();
+      }
+    });
+  });
+}
+
 // Read-only display of derived values: traits, deltas, computed eigenfreqs
 function renderReadout() {
   const el = document.getElementById('computed-readout');
@@ -1567,6 +1633,23 @@ function renderReadout() {
   html += row('dAmt', dAmt);
   html += row('Delta', `[${deltaRates[0].toExponential(2)}, ${deltaRates[1].toExponential(2)}]`);
   html += row('Damping uniform', waterSimulation._updateMesh.material.uniforms.damping.value.toFixed(4));
+  html += sep;
+  html += '<div class="row"><span>Active drivers</span><span></span></div>';
+  if (modeRandom) {
+    const eig = computeEigenOmega(modeRandomM, modeRandomN).toFixed(3);
+    html += row('&nbsp;&nbsp;Random mode (m,n)', `(${modeRandomM},${modeRandomN})`);
+    html += row('&nbsp;&nbsp;&nbsp;&nbsp;&omega; / eig', `${modeRandomOmega.toFixed(3)} / ${eig}`);
+  } else {
+    html += row('&nbsp;&nbsp;Random mode', 'off');
+  }
+  if (modeTest) {
+    html += row('&nbsp;&nbsp;Fixed test (m,n)', `(${modeTestM},${modeTestN})`);
+    html += row('&nbsp;&nbsp;&nbsp;&nbsp;&omega; / amp', `${modeTestOmega.toFixed(3)} / ${modeTestAmp.toFixed(4)}`);
+  }
+  if (modeSweep) {
+    const t = (performance.now() - sweepStartTime) / sweepDuration;
+    html += row('&nbsp;&nbsp;Sweep', `(${sweepM},${sweepN}) ${(t * 100).toFixed(0)}%`);
+  }
   html += sep;
   html += '<div class="row"><span>Eigenfreqs (rad/s)</span><span></span></div>';
   for (const band of audioBands) {
@@ -1587,6 +1670,7 @@ function shareSchema() {
     ['ar',    () => soundReactive,       v => { soundReactive = v === '1'; },       false],
     ['mr',    () => mouseReactive,       v => { mouseReactive = v === '1'; },       false],
     ['rs',    () => randomStart,         v => { randomStart = v === '1'; },         true],
+    ['rsm',   () => randomStartModes,    v => { randomStartModes = v === '1'; },    true],
     ['et',    () => eigenTune,           v => { eigenTune = v === '1'; },           true],
     ['ro',    () => renderObjects,       v => { renderObjects = v === '1'; applyRenderObjects(); }, false],
     ['dmp',   () => 1.0 - waterSimulation._updateMesh.material.uniforms.damping.value, v => waterSimulation.setDamping(1.0 - parseFloat(v)), 0.002 * scale],
@@ -1613,6 +1697,10 @@ function shareSchema() {
     ['sdur',  () => sweepDuration,       v => { sweepDuration = parseFloat(v); },    30000],
     ['rmm',   () => randomMaxM,          v => { randomMaxM = parseInt(v); },         8],
     ['rmn',   () => randomMaxN,          v => { randomMaxN = parseInt(v); },         5],
+    ['tm',    () => modeTestM,           v => { modeTestM = parseInt(v); },           4],
+    ['tn',    () => modeTestN,           v => { modeTestN = parseInt(v); },           2],
+    ['to',    () => modeTestOmega,       v => { modeTestOmega = parseFloat(v); },     1.0],
+    ['ta',    () => modeTestAmp,         v => { modeTestAmp = parseFloat(v); },       0.001],
   ];
 }
 
@@ -1740,6 +1828,7 @@ function setupUI() {
   });
   document.getElementById('opt-mouse').addEventListener('change', e => { mouseReactive = e.target.checked; });
   document.getElementById('opt-random-start').addEventListener('change', e => { randomStart = e.target.checked; });
+  document.getElementById('opt-random-start-modes').addEventListener('change', e => { randomStartModes = e.target.checked; });
   document.getElementById('opt-eigen-tune').addEventListener('change', e => {
     eigenTune = e.target.checked;
     renderReadout();
@@ -1804,6 +1893,11 @@ function setupUI() {
   bind('opt-sweep-dur',       'val-sweep-dur',       0, v => { sweepDuration = v * 1000; });
   bind('opt-rand-max-m',      'val-rand-max-m',      0, v => { randomMaxM = v; });
   bind('opt-rand-max-n',      'val-rand-max-n',      0, v => { randomMaxN = v; });
+  // Fixed-mode test sliders (key 'y')
+  bind('opt-test-m',          'val-test-m',          0, v => { modeTestM = Math.round(v); });
+  bind('opt-test-n',          'val-test-n',          0, v => { modeTestN = Math.round(v); });
+  bind('opt-test-omega',      'val-test-omega',      2, v => { modeTestOmega = v; });
+  bind('opt-test-amp',        'val-test-amp',        4, v => { modeTestAmp = v; });
 }
 
 
